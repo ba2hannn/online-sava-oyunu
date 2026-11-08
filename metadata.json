@@ -1,0 +1,6 @@
+{
+  "name": "Çağlar Boyu Savaş: Online",
+  "description": "5 tarihsel çağ, gelişmiş kule ve doktrin sistemi, gerçek zamanlı online çok oyunculu odalar ve 60 FPS akıcı savaş fiziği ile Çağlar Boyu Savaş strateji oyunu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
