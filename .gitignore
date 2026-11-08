@@ -1,6 +1,11 @@
 node_modules/
 build/
 dist/
+dist-server/
+data/
+*.db
+*.db-wal
+*.db-shm
 coverage/
 .DS_Store
 *.log

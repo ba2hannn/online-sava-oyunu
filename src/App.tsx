@@ -5,7 +5,7 @@ import { TitleScreenOverlay } from './components/TitleScreenOverlay';
 import { soundEngine } from './game/audio';
 import { getEraUnits } from './game/catalog';
 import { BattleSimulationEngine, HUDStateSnapshot } from './game/engine';
-import { ServerlessNetworkManager } from './game/network';
+import { OnlineGameNetworkManager, OpenRoomInfo } from './game/network';
 import { createInitialTeamState } from './game/rules';
 import {
   AIDifficulty,
@@ -19,7 +19,7 @@ import {
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<BattleSimulationEngine | null>(null);
-  const netRef = useRef<ServerlessNetworkManager | null>(null);
+  const netRef = useRef<OnlineGameNetworkManager | null>(null);
 
   const [lifecycle, setLifecycle] = useState<GameLifecycleState>('title');
   const [mode, setMode] = useState<GameMode>('ai');
@@ -28,11 +28,12 @@ export default function App() {
   const [muted, setMuted] = useState<boolean>(false);
   const [summary, setSummary] = useState<RunSummarySnapshot | null>(null);
 
-  // Online Room state (Serverless WebRTC P2P + Hybrid)
+  // Online Room state (Authoritative Server + WebSocket)
   const [wsConnected, setWsConnected] = useState<boolean>(true);
-  const [networkLabel, setNetworkLabel] = useState<string>('WebRTC P2P Hazır (Sunucusuz)');
+  const [networkLabel, setNetworkLabel] = useState<string>('Sunucuya Bağlanılıyor...');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomStatus, setRoomStatus] = useState<'idle' | 'waiting' | 'playing'>('idle');
+  const [openRooms, setOpenRooms] = useState<OpenRoomInfo[]>([]);
   const [onlineError, setOnlineError] = useState<string | null>(null);
 
   const [hud, setHud] = useState<HUDStateSnapshot>(() => ({
@@ -101,9 +102,9 @@ export default function App() {
     [playerName, syncBodyDataset]
   );
 
-  // Initialize Serverless WebRTC P2P Network Manager ONCE so typing name or starting game never drops WebRTC connection
+  // Initialize WebSocket Network Manager ONCE so typing name or starting game never drops connection
   useEffect(() => {
-    const net = new ServerlessNetworkManager({
+    const net = new OnlineGameNetworkManager({
       onStatusChange: (connected, label) => {
         setWsConnected(connected);
         setNetworkLabel(label);
@@ -112,6 +113,9 @@ export default function App() {
         setRoomCode(code);
         setRoomStatus('waiting');
         setOnlineError(null);
+      },
+      onRoomList: (rooms) => {
+        setOpenRooms(rooms);
       },
       onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode, resumeSnapshot }) => {
         setRoomCode(startedCode);
@@ -129,6 +133,12 @@ export default function App() {
       },
       onStateSnapshot: (snap) => {
         engineRef.current?.applyWorldSnapshot(snap);
+      },
+      onMatchOver: () => {
+        if (engineRef.current) {
+          engineRef.current.lifecycle = 'gameover';
+          syncBodyDataset('gameover');
+        }
       },
       getWorldSnapshot: () => {
         return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
@@ -148,11 +158,11 @@ export default function App() {
       setRoomCode(cleanCode);
       setTimeout(() => {
         net.joinRoom(cleanCode, 'Komutan 2');
-      }, 250);
+      }, 350);
     }
 
     return () => {
-      net.dispose();
+      net.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -167,6 +177,9 @@ export default function App() {
         setRoomCode(code);
         setRoomStatus('waiting');
         setOnlineError(null);
+      },
+      onRoomList: (rooms) => {
+        setOpenRooms(rooms);
       },
       onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode, resumeSnapshot }) => {
         setRoomCode(startedCode);
@@ -185,6 +198,12 @@ export default function App() {
       onStateSnapshot: (snap) => {
         engineRef.current?.applyWorldSnapshot(snap);
       },
+      onMatchOver: () => {
+        if (engineRef.current) {
+          engineRef.current.lifecycle = 'gameover';
+          syncBodyDataset('gameover');
+        }
+      },
       getWorldSnapshot: () => {
         return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
       },
@@ -192,7 +211,7 @@ export default function App() {
         setOnlineError(msg);
       },
     });
-  }, [dispatchCommand, startNewGame]);
+  }, [dispatchCommand, startNewGame, syncBodyDataset]);
 
   // Mount Canvas & 60 FPS Simulation Loop once
   useEffect(() => {
@@ -201,6 +220,15 @@ export default function App() {
       (runSummary) => {
         setSummary(runSummary);
         syncBodyDataset('gameover');
+        if (modeRef.current === 'online') {
+          netRef.current?.sendMatchFinish({
+            winnerTeam: runSummary.winner,
+            durationSeconds: runSummary.durationSec,
+            t1Era: engineRef.current?.team1.era ?? 0,
+            t2Era: engineRef.current?.team2.era ?? 0,
+            totalUnits: runSummary.unitsSpawned + runSummary.unitsDefeated,
+          });
+        }
       },
       (worldSnap) => {
         netRef.current?.sendStateSnapshot(worldSnap);
@@ -455,10 +483,10 @@ export default function App() {
           networkLabel={networkLabel}
           roomCode={roomCode}
           roomStatus={roomStatus}
-          openRooms={[]}
+          openRooms={openRooms}
           onlineError={onlineError}
-          onCreateOnlineRoom={() => {
-            netRef.current?.createRoom(playerName);
+          onCreateOnlineRoom={(title, isPrivate, customCode) => {
+            netRef.current?.createRoom(playerName, title, isPrivate, customCode);
           }}
           onJoinOnlineRoom={(code) => {
             netRef.current?.joinRoom(code, playerName);
@@ -466,7 +494,9 @@ export default function App() {
           onQuickMatchOnline={() => {
             netRef.current?.quickMatch(playerName);
           }}
-          onRefreshRooms={() => {}}
+          onRefreshRooms={() => {
+            netRef.current?.refreshRooms();
+          }}
         />
       )}
 

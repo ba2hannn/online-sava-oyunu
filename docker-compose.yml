@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: caglarboyusavas-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    volumes:
+      - cbs_data:/app/data
+
+volumes:
+  cbs_data:

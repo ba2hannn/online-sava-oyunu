@@ -644,7 +644,7 @@ export class BattleSimulationEngine {
     }
 
     this.hudSyncAccumulator += dt;
-    if (this.hudSyncAccumulator >= 0.4) {
+    if (this.hudSyncAccumulator >= 0.08) {
       this.hudSyncAccumulator = 0;
       this.emitHudSnapshot();
     }
@@ -652,7 +652,7 @@ export class BattleSimulationEngine {
     // Host (Team 1) periodically broadcasts authoritative world snapshot in Online Mode
     if (this.lifecycle === 'playing' && this.mode === 'online' && this.playerTeam === 1) {
       this.netSyncAccumulator += dt;
-      if (this.netSyncAccumulator >= 0.35) {
+      if (this.netSyncAccumulator >= 0.1) {
         this.netSyncAccumulator = 0;
         this.onStateBroadcast?.(this.exportWorldSnapshot());
       }
@@ -1442,10 +1442,17 @@ export class BattleSimulationEngine {
     this.units = (snap.units || []).map((incoming) => {
       const prev = existingByUid.get(incoming.uid);
       if (prev) {
+        let blendedX = incoming.x;
+        const diff = incoming.x - prev.x;
+        if (Math.abs(diff) < 3 || incoming.state === 'windup' || incoming.state === 'recover' || incoming.state === 'ko') {
+          blendedX = incoming.x;
+        } else if (Math.abs(diff) < 55) {
+          blendedX = prev.x + diff * 0.6;
+        }
+
         return {
           ...incoming,
-          // Smoothly blend X if close, snap if far
-          x: Math.abs(prev.x - incoming.x) < 45 ? prev.x * 0.35 + incoming.x * 0.65 : incoming.x,
+          x: blendedX,
           walkDistance: prev.walkDistance,
           scaleX: prev.scaleX,
           scaleY: prev.scaleY,

@@ -1,8 +1,13 @@
-import Peer, { DataConnection } from 'peerjs';
 import { BattleActionCommand, TeamId, WorldSyncSnapshot } from './types';
 
-const PEER_PREFIX = 'cbs-online-v2-room-';
-const QUICKMATCH_PEER_ID = 'cbs-online-v2-quickmatch-lobby';
+export interface OpenRoomInfo {
+  code: string;
+  hostName: string;
+  title: string;
+  playerCount: number;
+  status: string;
+  createdAt: number;
+}
 
 export interface OnlineMatchPlayers {
   team1Name: string;
@@ -13,648 +18,391 @@ export interface OnlineMatchPlayers {
 }
 
 export interface NetworkCallbacks {
-  onStatusChange: (connected: boolean, modeLabel: string) => void;
-  onRoomWaiting: (code: string) => void;
+  onStatusChange: (connected: boolean, modeLabel: string, pingMs?: number) => void;
+  onRoomWaiting: (code: string, title?: string, hostName?: string) => void;
   onMatchStart: (info: OnlineMatchPlayers) => void;
   onRemoteCommand: (cmd: BattleActionCommand) => void;
   onStateSnapshot: (snapshot: WorldSyncSnapshot) => void;
+  onRoomList?: (openRooms: OpenRoomInfo[]) => void;
+  onMatchOver?: (winnerTeam: TeamId, winnerName: string, reason?: string) => void;
+  onChatMessage?: (sender: string, text: string, isSystem: boolean) => void;
   getWorldSnapshot?: () => WorldSyncSnapshot | null;
   onError: (msg: string) => void;
 }
 
-function generateCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 5; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
-}
-
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-];
-
-export class ServerlessNetworkManager {
+export class OnlineGameNetworkManager {
   private callbacks: NetworkCallbacks;
-  private peer: Peer | null = null;
-  private conn: DataConnection | null = null;
-  private bc: BroadcastChannel | null = null;
-  private joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
-  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  private ws: WebSocket | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private snapshotInterval: ReturnType<typeof setInterval> | null = null;
 
-  private clientId = `p2p_${Math.random().toString(36).slice(2, 10)}`;
-  private currentCode: string | null = null;
+  private clientId: string | null = null;
+  private currentRoomCode: string | null = null;
   private myTeam: TeamId = 1;
   private myName = 'Komutan';
   private opponentName = 'Rakip Komutan';
-  private matchStarted = false;
-  private isReconnecting = false;
-  private lastPacketTime = Date.now();
+  private isConnecting = false;
+  private isManualLeave = false;
+  private pingMs = 0;
   private processedCmdIds = new Set<string>();
 
   constructor(callbacks: NetworkCallbacks) {
     this.callbacks = callbacks;
-    this.initChannels();
-    this.startWatchdog();
+    this.connect();
   }
 
   public updateCallbacks(callbacks: NetworkCallbacks): void {
     this.callbacks = callbacks;
   }
 
-  private initChannels(): void {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      this.bc = new BroadcastChannel('cbs_online_p2p_bus');
-      this.bc.onmessage = (ev) => {
-        this.handleBusPacket(ev.data);
-      };
-    }
-
-    this.callbacks.onStatusChange(true, 'Sunucusuz WebRTC P2P Aktif');
+  public getMyTeam(): TeamId {
+    return this.myTeam;
   }
 
-  private startWatchdog(): void {
-    this.watchdogTimer = setInterval(() => {
-      if (!this.matchStarted || !this.currentCode) return;
-
-      // Send lightweight heartbeat ping over active connection
-      if (this.conn && this.conn.open) {
-        try {
-          this.conn.send({ type: 'P2P_PING', ts: Date.now() });
-        } catch {
-          // ignore
-        }
-      }
-
-      // Check if signaling peer disconnected on Host
-      if (this.myTeam === 1 && this.peer && this.peer.disconnected && !this.peer.destroyed) {
-        try {
-          this.peer.reconnect();
-        } catch {
-          // ignore
-        }
-      }
-
-      // If Guest (Team 2) lost connection or hasn't heard from Host in > 5.5s, auto-reconnect seamlessly
-      const silenceMs = Date.now() - this.lastPacketTime;
-      const connDead = !this.conn || !this.conn.open;
-      if (this.myTeam === 2 && (connDead || silenceMs > 5500) && !this.isReconnecting) {
-        this.callbacks.onStatusChange(false, 'Bağlantı Koptu · Otomatik Yeniden Bağlanılıyor...');
-        this.reconnectToOngoingRoom();
-      }
-    }, 2200);
+  public getRoomCode(): string | null {
+    return this.currentRoomCode;
   }
 
-  private reconnectToOngoingRoom(): void {
-    if (!this.currentCode || this.isReconnecting) return;
-    this.isReconnecting = true;
-
-    // Also request state sync over BroadcastChannel if on same machine
-    this.bc?.postMessage({
-      type: 'BC_SYNC_REQUEST',
-      code: this.currentCode,
-      guestName: this.myName,
-    });
-
-    try {
-      if (!this.peer || this.peer.destroyed) {
-        this.peer = new Peer({
-          secure: true,
-          config: { iceServers: ICE_SERVERS },
-        });
-        this.peer.on('open', () => {
-          this.dialHostForReconnect();
-        });
-        this.peer.on('error', () => {
-          this.isReconnecting = false;
-        });
-      } else if (this.peer.disconnected) {
-        this.peer.reconnect();
-        setTimeout(() => this.dialHostForReconnect(), 600);
-      } else {
-        this.dialHostForReconnect();
-      }
-    } catch {
-      this.isReconnecting = false;
-    }
+  public getPing(): number {
+    return this.pingMs;
   }
 
-  private dialHostForReconnect(): void {
-    if (!this.peer || !this.currentCode) {
-      this.isReconnecting = false;
+  private getWsUrl(): string {
+    if (typeof window === 'undefined') return 'ws://127.0.0.1:3000/ws';
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/ws`;
+  }
+
+  public connect(): void {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
+
+    this.isConnecting = true;
+    this.callbacks.onStatusChange(false, 'Sunucuya Bağlanılıyor...');
+
     try {
-      const hostPeerId =
-        this.currentCode === 'HIZLI'
-          ? QUICKMATCH_PEER_ID
-          : `${PEER_PREFIX}${this.currentCode}`;
-      const conn = this.peer.connect(hostPeerId, {
-        reliable: true,
-        serialization: 'json',
-      });
-      this.conn = conn;
-      this.setupDataConnection(conn, this.currentCode, false);
-      setTimeout(() => {
-        this.isReconnecting = false;
-      }, 2000);
-    } catch {
-      this.isReconnecting = false;
-    }
-  }
+      const url = this.getWsUrl();
+      this.ws = new WebSocket(url);
 
-  public requestManualSyncOrReconnect(): void {
-    if (!this.currentCode) return;
-    if (this.myTeam === 1) {
-      // Host immediately broadcasts full snapshot
-      const snap = this.callbacks.getWorldSnapshot?.();
-      if (snap) {
-        this.sendStateSnapshot(snap);
-        this.callbacks.onStatusChange(true, `Senkronize Edildi (#${this.currentCode})`);
-      }
-    } else {
-      if (this.conn && this.conn.open) {
-        this.conn.send({ type: 'P2P_SYNC_REQUEST', code: this.currentCode });
-        this.callbacks.onStatusChange(true, 'Senkronizasyon İstendi...');
-      } else {
-        this.reconnectToOngoingRoom();
-      }
-      this.bc?.postMessage({
-        type: 'BC_SYNC_REQUEST',
-        code: this.currentCode,
-        guestName: this.myName,
-      });
-    }
-  }
+      this.ws.onopen = () => {
+        this.isConnecting = false;
+        this.isManualLeave = false;
+        this.callbacks.onStatusChange(true, '🟢 Çevrimiçi (Sunucu Senkronize)', this.pingMs);
+        this.startPingLoop();
+        this.refreshRooms();
 
-  private clearJoinRetry(): void {
-    if (this.joinRetryTimer) {
-      clearTimeout(this.joinRetryTimer);
-      this.joinRetryTimer = null;
-    }
-  }
-
-  private destroyPeer(): void {
-    this.clearJoinRetry();
-    if (this.conn) {
-      try {
-        this.conn.close();
-      } catch {
-        // ignore
-      }
-      this.conn = null;
-    }
-    if (this.peer) {
-      try {
-        this.peer.destroy();
-      } catch {
-        // ignore
-      }
-      this.peer = null;
-    }
-  }
-
-  public createRoom(playerName: string, customCode?: string): string {
-    this.myName = (playerName || 'Komutan 1').trim() || 'Komutan 1';
-    this.myTeam = 1;
-    this.matchStarted = false;
-    const code = customCode || generateCode();
-    this.currentCode = code;
-    this.callbacks.onRoomWaiting(code);
-    this.callbacks.onStatusChange(true, `Oda #${code} Hazırlanıyor...`);
-
-    this.destroyPeer();
-    try {
-      const peerId = `${PEER_PREFIX}${code}`;
-      const peer = new Peer(peerId, {
-        secure: true,
-        config: { iceServers: ICE_SERVERS },
-      });
-      this.peer = peer;
-
-      peer.on('open', () => {
-        this.callbacks.onStatusChange(true, `Oda #${code} Aktif · Linki Paylaşın`);
-      });
-
-      peer.on('connection', (conn) => {
-        this.conn = conn;
-        this.setupDataConnection(conn, code, true);
-      });
-
-      peer.on('error', (err) => {
-        if (err.type === 'unavailable-id' && !customCode) {
-          this.createRoom(this.myName);
-        } else {
-          this.callbacks.onStatusChange(true, `Oda #${code} Aktif`);
+        // If we were in a room before disconnect, attempt re-join
+        if (this.currentRoomCode) {
+          this.joinRoom(this.currentRoomCode, this.myName);
         }
-      });
-    } catch {
-      this.callbacks.onStatusChange(true, `Oda #${code} Aktif`);
-    }
+      };
 
-    return code;
+      this.ws.onmessage = (event) => {
+        this.handleMessage(event.data);
+      };
+
+      this.ws.onerror = () => {
+        this.callbacks.onStatusChange(false, '🔴 Bağlantı Hatası');
+      };
+
+      this.ws.onclose = () => {
+        this.stopPingLoop();
+        this.stopSnapshotLoop();
+        this.callbacks.onStatusChange(false, '⚪ Bağlantı Kesildi (Yeniden deneniyor...)');
+
+        if (!this.isManualLeave) {
+          if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+          this.reconnectTimeout = setTimeout(() => {
+            this.connect();
+          }, 2500);
+        }
+      };
+    } catch (err) {
+      this.isConnecting = false;
+      this.callbacks.onError('WebSocket sunucusuna bağlanılamadı.');
+    }
   }
 
-  public joinRoom(codeRaw: string, playerName: string, attempt = 1): void {
-    const code = codeRaw.trim().toUpperCase();
-    if (!code) return;
-    this.myName = (playerName || 'Komutan 2').trim() || 'Komutan 2';
-    this.myTeam = 2;
-    this.currentCode = code;
-    this.callbacks.onStatusChange(true, `Oda #${code} Bağlanıyor...`);
+  private startPingLoop(): void {
+    this.stopPingLoop();
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send({ type: 'PING', clientTs: Date.now() });
+      }
+    }, 2000);
+  }
 
-    // 1. BroadcastChannel announcement for instant same-browser multi-tab join or resume
-    this.bc?.postMessage({
-      type: 'BC_JOIN_REQUEST',
-      code,
-      guestName: this.myName,
-      guestId: this.clientId,
-    });
+  private stopPingLoop(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
 
-    // 2. Serverless WebRTC P2P connection over the internet
-    this.destroyPeer();
+  private startSnapshotLoop(): void {
+    this.stopSnapshotLoop();
+    // Only Team 1 (Authoritative Host) broadcasts state snapshots
+    if (this.myTeam !== 1) return;
+
+    this.snapshotInterval = setInterval(() => {
+      if (!this.currentRoomCode) return;
+      if (this.callbacks.getWorldSnapshot) {
+        const snap = this.callbacks.getWorldSnapshot();
+        if (snap) {
+          this.sendStateSnapshot(snap);
+        }
+      }
+    }, 120); // 8.3 Hz snapshot frequency for silky smooth sync
+  }
+
+  private stopSnapshotLoop(): void {
+    if (this.snapshotInterval) {
+      clearInterval(this.snapshotInterval);
+      this.snapshotInterval = null;
+    }
+  }
+
+  private send(payload: unknown): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
+
+  private handleMessage(raw: string): void {
     try {
-      const peer = new Peer({
-        secure: true,
-        config: { iceServers: ICE_SERVERS },
-      });
-      this.peer = peer;
+      const data = JSON.parse(raw);
 
-      peer.on('open', () => {
-        const hostPeerId =
-          code === 'HIZLI' ? QUICKMATCH_PEER_ID : `${PEER_PREFIX}${code}`;
-        const conn = peer.connect(hostPeerId, {
-          reliable: true,
-          serialization: 'json',
-        });
-        this.conn = conn;
-        this.setupDataConnection(conn, code, false);
+      switch (data.type) {
+        case 'WELCOME': {
+          this.clientId = data.clientId;
+          if (Array.isArray(data.openRooms) && this.callbacks.onRoomList) {
+            this.callbacks.onRoomList(data.openRooms);
+          }
+          break;
+        }
 
-        this.clearJoinRetry();
-        this.joinRetryTimer = setTimeout(() => {
-          if (!this.matchStarted && attempt < 4) {
-            this.joinRoom(code, this.myName, attempt + 1);
-          } else if (!this.matchStarted) {
-            this.callbacks.onError(
-              `#${code} odasına ulaşılamadı. Oda sahibinin sayfayı açık tuttuğundan emin olun.`
+        case 'PONG': {
+          if (data.clientTs) {
+            this.pingMs = Math.max(1, Date.now() - data.clientTs);
+            this.callbacks.onStatusChange(true, `🟢 Çevrimiçi · ${this.pingMs} ms`, this.pingMs);
+          }
+          break;
+        }
+
+        case 'ROOM_LIST': {
+          if (Array.isArray(data.openRooms) && this.callbacks.onRoomList) {
+            this.callbacks.onRoomList(data.openRooms);
+          }
+          break;
+        }
+
+        case 'ROOM_JOINED': {
+          this.currentRoomCode = data.code;
+          this.myTeam = data.team as TeamId;
+          if (data.status === 'waiting') {
+            this.callbacks.onRoomWaiting(data.code, data.title, data.hostName);
+          }
+          break;
+        }
+
+        case 'MATCH_START': {
+          this.currentRoomCode = data.code;
+          const p1 = data.players.find((p: { team: number }) => p.team === 1);
+          const p2 = data.players.find((p: { team: number }) => p.team === 2);
+
+          const team1Name = p1?.name || 'Kuzey Ordusu';
+          const team2Name = p2?.name || 'Güney Lejyonu';
+
+          this.opponentName = this.myTeam === 1 ? team2Name : team1Name;
+
+          this.callbacks.onMatchStart({
+            team1Name,
+            team2Name,
+            myTeam: this.myTeam,
+            roomCode: data.code,
+          });
+
+          // If Host, start authoritative snapshot broadcast loop
+          if (this.myTeam === 1) {
+            this.startSnapshotLoop();
+          }
+          break;
+        }
+
+        case 'ROOM_SYNC': {
+          this.currentRoomCode = data.code;
+          this.myTeam = data.team as TeamId;
+          if (data.lastSnapshot) {
+            this.callbacks.onStateSnapshot(data.lastSnapshot);
+          }
+          break;
+        }
+
+        case 'REMOTE_BATTLE_COMMAND': {
+          const cmdId = String(data.cmdId);
+          if (this.processedCmdIds.has(cmdId)) return;
+          this.processedCmdIds.add(cmdId);
+
+          if (data.command) {
+            this.callbacks.onRemoteCommand(data.command as BattleActionCommand);
+          }
+          break;
+        }
+
+        case 'STATE_SNAPSHOT': {
+          // Team 2 applies authoritative snapshot from Team 1
+          if (this.myTeam === 2 && data.snapshot) {
+            this.callbacks.onStateSnapshot(data.snapshot);
+          }
+          break;
+        }
+
+        case 'MATCH_OVER': {
+          this.stopSnapshotLoop();
+          if (this.callbacks.onMatchOver) {
+            this.callbacks.onMatchOver(
+              data.winnerTeam as TeamId,
+              data.winnerName,
+              data.reason
             );
           }
-        }, 3500);
-      });
-
-      peer.on('error', () => {
-        if (!this.matchStarted && attempt < 3) {
-          this.clearJoinRetry();
-          this.joinRetryTimer = setTimeout(() => {
-            this.joinRoom(code, this.myName, attempt + 1);
-          }, 1500);
-        } else if (!this.matchStarted) {
-          this.callbacks.onError(
-            `#${code} odası bulunamadı veya kapandı. Lütfen yeni bir oda kodu deneyin.`
-          );
+          break;
         }
-      });
+
+        case 'CHAT_MESSAGE': {
+          if (this.callbacks.onChatMessage) {
+            this.callbacks.onChatMessage(data.sender, data.text, Boolean(data.isSystem));
+          }
+          break;
+        }
+
+        case 'PLAYER_LEFT': {
+          if (this.callbacks.onChatMessage) {
+            this.callbacks.onChatMessage(
+              'Sistem',
+              `${data.leftPlayerName || 'Bir oyuncu'} savaştan ayrıldı.`,
+              true
+            );
+          }
+          break;
+        }
+
+        case 'ERROR': {
+          this.callbacks.onError(data.message || 'Bilinmeyen sunucu hatası.');
+          break;
+        }
+      }
     } catch {
-      // Fallback handled by BroadcastChannel
+      // Ignore invalid packet
     }
+  }
+
+  public createRoom(
+    playerName: string,
+    title?: string,
+    isPrivate = false,
+    customCode?: string
+  ): void {
+    this.myName = playerName;
+    this.send({
+      type: 'CREATE_ROOM',
+      playerName,
+      title,
+      isPrivate,
+      code: customCode,
+    });
+  }
+
+  public joinRoom(code: string, playerName: string): void {
+    this.myName = playerName;
+    this.send({
+      type: 'JOIN_ROOM',
+      code: code.trim().toUpperCase(),
+      playerName,
+    });
   }
 
   public quickMatch(playerName: string): void {
-    this.myName = (playerName || 'Savaşçı').trim() || 'Savaşçı';
-    this.matchStarted = false;
-    this.callbacks.onStatusChange(true, 'Hızlı Eşleşme Aranıyor...');
-
-    this.destroyPeer();
-    try {
-      const hostPeer = new Peer(QUICKMATCH_PEER_ID, {
-        secure: true,
-        config: { iceServers: ICE_SERVERS },
-      });
-      this.peer = hostPeer;
-
-      hostPeer.on('open', () => {
-        this.myTeam = 1;
-        this.currentCode = 'HIZLI';
-        this.callbacks.onRoomWaiting('HIZLI');
-        this.callbacks.onStatusChange(true, 'Hızlı Eşleşme Kuyruğu Aktif');
-      });
-
-      hostPeer.on('connection', (conn) => {
-        this.conn = conn;
-        this.setupDataConnection(conn, 'HIZLI', true);
-      });
-
-      hostPeer.on('error', (err) => {
-        if (err.type === 'unavailable-id') {
-          this.joinRoom('HIZLI', this.myName);
-        } else {
-          this.createRoom(this.myName);
-        }
-      });
-    } catch {
-      this.createRoom(this.myName);
-    }
-  }
-
-  private setupDataConnection(conn: DataConnection, code: string, isHost: boolean): void {
-    conn.on('open', () => {
-      this.clearJoinRetry();
-      this.isReconnecting = false;
-      this.lastPacketTime = Date.now();
-      this.callbacks.onStatusChange(true, `WebRTC P2P Bağlı (#${code})`);
-      if (!isHost) {
-        conn.send({
-          type: 'P2P_HELLO',
-          guestName: this.myName,
-          code,
-        });
-      }
-    });
-
-    conn.on('data', (raw: unknown) => {
-      this.lastPacketTime = Date.now();
-      const msg = raw as Record<string, unknown>;
-      if (!msg || typeof msg !== 'object') return;
-
-      if (msg.type === 'P2P_PING') {
-        conn.send({ type: 'P2P_PONG', ts: Date.now() });
-        return;
-      }
-      if (msg.type === 'P2P_PONG') {
-        return;
-      }
-
-      if (msg.type === 'P2P_HELLO' && isHost) {
-        this.clearJoinRetry();
-        const guestName = String(msg.guestName || 'Komutan 2');
-        this.opponentName = guestName;
-
-        // If match was ALREADY running, do NOT reset! Send P2P_MATCH_RESUME with live snapshot!
-        const existingSnap = this.matchStarted
-          ? this.callbacks.getWorldSnapshot?.() || undefined
-          : undefined;
-
-        if (this.matchStarted && existingSnap) {
-          conn.send({
-            type: 'P2P_MATCH_RESUME',
-            code,
-            team1Name: this.myName,
-            team2Name: guestName,
-            snapshot: existingSnap,
-          });
-          this.callbacks.onStatusChange(true, `${guestName} Yeniden Bağlandı (#${code})`);
-          return;
-        }
-
-        this.matchStarted = true;
-        conn.send({
-          type: 'P2P_MATCH_START',
-          code,
-          team1Name: this.myName,
-          team2Name: guestName,
-        });
-        this.myTeam = 1;
-        this.callbacks.onMatchStart({
-          team1Name: this.myName,
-          team2Name: guestName,
-          myTeam: 1,
-          roomCode: code,
-        });
-      } else if (msg.type === 'P2P_MATCH_START' && !isHost) {
-        this.clearJoinRetry();
-        this.matchStarted = true;
-        this.myTeam = 2;
-        this.opponentName = String(msg.team1Name || 'Komutan 1');
-        this.callbacks.onMatchStart({
-          team1Name: this.opponentName,
-          team2Name: this.myName,
-          myTeam: 2,
-          roomCode: code,
-        });
-      } else if (msg.type === 'P2P_MATCH_RESUME' && !isHost) {
-        this.clearJoinRetry();
-        this.isReconnecting = false;
-        const wasAlreadyStarted = this.matchStarted;
-        this.matchStarted = true;
-        this.myTeam = 2;
-        this.opponentName = String(msg.team1Name || 'Komutan 1');
-        const snap = msg.snapshot as WorldSyncSnapshot | undefined;
-
-        if (!wasAlreadyStarted) {
-          this.callbacks.onMatchStart({
-            team1Name: this.opponentName,
-            team2Name: this.myName,
-            myTeam: 2,
-            roomCode: code,
-            resumeSnapshot: snap,
-          });
-        } else if (snap) {
-          this.callbacks.onStateSnapshot(snap);
-        }
-        this.callbacks.onStatusChange(true, `Senkronize Edildi (#${code})`);
-      } else if (msg.type === 'P2P_SYNC_REQUEST' && isHost) {
-        const snap = this.callbacks.getWorldSnapshot?.();
-        if (snap) {
-          conn.send({
-            type: 'P2P_STATE_SYNC',
-            snapshot: snap,
-          });
-        }
-      } else if (msg.type === 'P2P_STATE_SYNC' && !isHost) {
-        const snap = msg.snapshot as WorldSyncSnapshot | undefined;
-        if (snap) {
-          this.callbacks.onStateSnapshot(snap);
-        }
-      } else if (msg.type === 'P2P_COMMAND') {
-        const cmdId = String(msg.cmdId || '');
-        if (cmdId && this.processedCmdIds.has(cmdId)) return;
-        if (cmdId) this.processedCmdIds.add(cmdId);
-        const command = msg.command as BattleActionCommand;
-        if (command && command.team !== this.myTeam) {
-          this.callbacks.onRemoteCommand(command);
-          // If Host received a command from Guest, immediately broadcast updated authoritative snapshot
-          if (isHost) {
-            const snap = this.callbacks.getWorldSnapshot?.();
-            if (snap) {
-              conn.send({ type: 'P2P_STATE_SYNC', snapshot: snap });
-            }
-          }
-        }
-      }
-    });
-
-    conn.on('close', () => {
-      if (this.matchStarted) {
-        this.callbacks.onStatusChange(false, 'Rakip Bağlantısı Bekleniyor (Otomatik Devam)...');
-      }
+    this.myName = playerName;
+    this.send({
+      type: 'QUICK_MATCH',
+      playerName,
     });
   }
 
-  private handleBusPacket(msg: Record<string, unknown>): void {
-    if (!msg || typeof msg !== 'object') return;
-    this.lastPacketTime = Date.now();
-
-    if (
-      msg.type === 'BC_JOIN_REQUEST' &&
-      this.myTeam === 1 &&
-      this.currentCode &&
-      msg.code === this.currentCode
-    ) {
-      this.clearJoinRetry();
-      const guestName = String(msg.guestName || 'Komutan 2');
-      const existingSnap = this.matchStarted
-        ? this.callbacks.getWorldSnapshot?.() || undefined
-        : undefined;
-
-      if (this.matchStarted && existingSnap) {
-        this.bc?.postMessage({
-          type: 'BC_MATCH_RESUME',
-          code: this.currentCode,
-          team1Name: this.myName,
-          team2Name: guestName,
-          snapshot: existingSnap,
-        });
-        return;
-      }
-
-      this.matchStarted = true;
-      this.bc?.postMessage({
-        type: 'BC_MATCH_START',
-        code: this.currentCode,
-        team1Name: this.myName,
-        team2Name: guestName,
-      });
-      this.callbacks.onMatchStart({
-        team1Name: this.myName,
-        team2Name: guestName,
-        myTeam: 1,
-        roomCode: this.currentCode,
-      });
-    } else if (
-      msg.type === 'BC_MATCH_START' &&
-      this.myTeam === 2 &&
-      this.currentCode &&
-      msg.code === this.currentCode
-    ) {
-      this.clearJoinRetry();
-      this.matchStarted = true;
-      this.callbacks.onMatchStart({
-        team1Name: String(msg.team1Name || 'Komutan 1'),
-        team2Name: this.myName,
-        myTeam: 2,
-        roomCode: this.currentCode,
-      });
-    } else if (
-      msg.type === 'BC_MATCH_RESUME' &&
-      this.myTeam === 2 &&
-      this.currentCode &&
-      msg.code === this.currentCode
-    ) {
-      this.clearJoinRetry();
-      const wasStarted = this.matchStarted;
-      this.matchStarted = true;
-      const snap = msg.snapshot as WorldSyncSnapshot | undefined;
-      if (!wasStarted) {
-        this.callbacks.onMatchStart({
-          team1Name: String(msg.team1Name || 'Komutan 1'),
-          team2Name: this.myName,
-          myTeam: 2,
-          roomCode: this.currentCode,
-          resumeSnapshot: snap,
-        });
-      } else if (snap) {
-        this.callbacks.onStateSnapshot(snap);
-      }
-    } else if (
-      msg.type === 'BC_SYNC_REQUEST' &&
-      this.myTeam === 1 &&
-      this.currentCode &&
-      msg.code === this.currentCode
-    ) {
-      const snap = this.callbacks.getWorldSnapshot?.();
-      if (snap) {
-        this.bc?.postMessage({
-          type: 'BC_STATE_SYNC',
-          code: this.currentCode,
-          snapshot: snap,
-        });
-      }
-    } else if (
-      msg.type === 'BC_STATE_SYNC' &&
-      this.myTeam === 2 &&
-      this.currentCode &&
-      msg.code === this.currentCode
-    ) {
-      const snap = msg.snapshot as WorldSyncSnapshot | undefined;
-      if (snap) {
-        this.callbacks.onStateSnapshot(snap);
-      }
-    } else if (msg.type === 'BC_COMMAND' && msg.code === this.currentCode) {
-      const cmdId = String(msg.cmdId || '');
-      if (cmdId && this.processedCmdIds.has(cmdId)) return;
-      if (cmdId) this.processedCmdIds.add(cmdId);
-      const command = msg.command as BattleActionCommand;
-      if (command && command.team !== this.myTeam) {
-        this.callbacks.onRemoteCommand(command);
-      }
-    }
+  public refreshRooms(): void {
+    this.send({ type: 'LIST_ROOMS' });
   }
 
   public sendBattleCommand(cmd: BattleActionCommand): void {
-    const cmdId = `${this.clientId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const cmdId = `${this.clientId || 'c'}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     this.processedCmdIds.add(cmdId);
 
-    if (this.conn && this.conn.open) {
-      this.conn.send({
-        type: 'P2P_COMMAND',
-        cmdId,
-        command: cmd,
-      });
-    }
-
-    if (this.bc && this.currentCode) {
-      this.bc.postMessage({
-        type: 'BC_COMMAND',
-        code: this.currentCode,
-        cmdId,
-        command: cmd,
-      });
-    }
+    this.send({
+      type: 'BATTLE_COMMAND',
+      cmdId,
+      team: this.myTeam,
+      command: cmd,
+    });
   }
 
   public sendStateSnapshot(snapshot: WorldSyncSnapshot): void {
-    if (this.myTeam !== 1) return;
+    this.send({
+      type: 'STATE_SNAPSHOT',
+      snapshot,
+    });
+  }
 
-    if (this.conn && this.conn.open) {
-      try {
-        this.conn.send({
-          type: 'P2P_STATE_SYNC',
-          snapshot,
-        });
-      } catch {
-        // ignore
-      }
-    }
+  public sendMatchFinish(data: {
+    winnerTeam: TeamId;
+    durationSeconds: number;
+    t1Era: number;
+    t2Era: number;
+    totalUnits: number;
+  }): void {
+    this.stopSnapshotLoop();
+    this.send({
+      type: 'MATCH_FINISH',
+      ...data,
+    });
+  }
 
-    if (this.bc && this.currentCode) {
-      this.bc.postMessage({
-        type: 'BC_STATE_SYNC',
-        code: this.currentCode,
-        snapshot,
-      });
+  public sendChatMessage(text: string): void {
+    this.send({
+      type: 'CHAT_MESSAGE',
+      text,
+    });
+  }
+
+  public leaveRoom(): void {
+    this.isManualLeave = true;
+    this.stopSnapshotLoop();
+    this.send({ type: 'LEAVE_ROOM' });
+    this.currentRoomCode = null;
+    this.refreshRooms();
+  }
+
+  public requestManualSyncOrReconnect(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.connect();
+    } else {
+      this.send({ type: 'PING', clientTs: Date.now() });
+      this.refreshRooms();
     }
   }
 
-  public dispose(): void {
-    if (this.watchdogTimer) {
-      clearInterval(this.watchdogTimer);
-      this.watchdogTimer = null;
+  public disconnect(): void {
+    this.isManualLeave = true;
+    this.stopPingLoop();
+    this.stopSnapshotLoop();
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
     }
-    this.destroyPeer();
-    this.bc?.close();
   }
 }
+
+// Backward-compatible alias for existing imports
+export { OnlineGameNetworkManager as ServerlessNetworkManager };
