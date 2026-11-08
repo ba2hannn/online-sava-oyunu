@@ -1,0 +1,24 @@
+{
+ "id": "tower_ion",
+ "label": "İyon Foton Kulesi",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 75,
+   "h": 121
+  },
+  {
+   "name": "weapon",
+   "file": "weapon.png",
+   "w": 33,
+   "h": 54
+  },
+  {
+   "name": "proj",
+   "file": "proj.png",
+   "w": 81,
+   "h": 22
+  }
+ ]
+}

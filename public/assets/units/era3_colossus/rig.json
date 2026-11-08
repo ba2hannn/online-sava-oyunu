@@ -1,0 +1,217 @@
+{
+ "id": "era3_colossus",
+ "label": "Goliath Savaş Yürüyücüsü",
+ "loco": "walker",
+ "attack": "mech",
+ "params": {},
+ "nodes": [
+  {
+   "name": "torso",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "torso.png"
+   ],
+   "w": 308,
+   "h": 188
+  },
+  {
+   "name": "legB",
+   "parent": "torso",
+   "att": [
+    0.62,
+    0.78
+   ],
+   "piv": [
+    0.45,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 165,
+   "h": 265
+  },
+  {
+   "name": "armB",
+   "parent": "torso",
+   "att": [
+    0.4,
+    0.55
+   ],
+   "piv": [
+    0.2,
+    0.2
+   ],
+   "z": -1,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 144,
+   "h": 135
+  },
+  {
+   "name": "legF",
+   "parent": "torso",
+   "att": [
+    0.4,
+    0.78
+   ],
+   "piv": [
+    0.42,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 165,
+   "h": 279
+  },
+  {
+   "name": "rack",
+   "parent": "torso",
+   "att": [
+    0.5,
+    0.05
+   ],
+   "piv": [
+    0.5,
+    0.9
+   ],
+   "z": 1,
+   "role": "rack",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rack.png"
+   ],
+   "w": 133,
+   "h": 76
+  },
+  {
+   "name": "armF",
+   "parent": "torso",
+   "att": [
+    0.55,
+    0.55
+   ],
+   "piv": [
+    0.1,
+    0.3
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 255,
+   "h": 135
+  },
+  {
+   "name": "puffL",
+   "parent": "torso",
+   "att": [
+    0.02,
+    0.85
+   ],
+   "piv": [
+    0.8,
+    0.9
+   ],
+   "z": 3,
+   "role": "puff",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.8,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "puffL.png"
+   ],
+   "w": 84,
+   "h": 90
+  },
+  {
+   "name": "rocketPuff",
+   "parent": "rack",
+   "att": [
+    0.5,
+    0.0
+   ],
+   "piv": [
+    0.5,
+    1.0
+   ],
+   "z": 2,
+   "role": "flash",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.8,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rocketPuff.png"
+   ],
+   "w": 75,
+   "h": 110
+  }
+ ]
+}

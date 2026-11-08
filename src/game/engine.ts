@@ -4,8 +4,14 @@ import {
   TEAM1_BASE_X,
   TEAM2_BASE_X,
   WORLD_WIDTH,
+  BASE_VISUAL_HEIGHT,
+  BASE_VISUAL_WIDTH,
+  UNITS,
   getTurretById,
+  turretSlotOffsetY,
 } from './catalog';
+import { spriteAssets, TOWER_FOR_TURRET, TOWER_WEAPON, type SpriteImg } from './spriteAssets';
+import { computePose, drawRig, type Rig, type TrailState } from './spriteRig';
 import {
   applyBattleCommand,
   applyDamageToUnit,
@@ -38,6 +44,23 @@ import {
 } from './types';
 
 const PARTICLE_POOL_SIZE = 512;
+
+/** Mermi türü -> fx sprite (len: oyun içi uzunluk px; heading: sprite'ın kendi baktığı yön, radyan) */
+const PROJECTILE_SPRITES: Record<string, { name: string; len: number; heading?: number; spin?: number }> = {
+  stone: { name: 'stone', len: 20, spin: 6 },
+  arrow: { name: 'arrow', len: 40 },
+  bullet: { name: 'bullet_a', len: 14 },
+  cannon: { name: 'cannonball', len: 18 },
+  rocket: { name: 'rocket', len: 44 },
+  missile: { name: 'rocket', len: 52 },
+  laser: { name: 'laser', len: 54 },
+  ion: { name: 'laser', len: 54 },
+  plasma: { name: 'plasma_a', len: 26, spin: 4 },
+  tesla: { name: 'plasma_b', len: 28, spin: -4 },
+  meteor: { name: 'meteor', len: 78, heading: Math.PI * 0.78 },
+  airstrike: { name: 'rocket', len: 50 },
+  orbital: { name: 'laser', len: 90 },
+};
 const PROJECTILE_POOL_SIZE = 256;
 const FLOATING_TEXT_POOL_SIZE = 64;
 
@@ -95,6 +118,11 @@ export class BattleSimulationEngine {
 
   // Ambient star/dust seeds
   private stars: Array<{ x: number; y: number; r: number; a: number }> = [];
+  private fxSprites: Array<{ x: number; y: number; name: string; t: number; dur: number; size: number }> = [];
+  private rigState = new Map<
+    number,
+    { prevState: string; impactAt: number; lastWalk: number; movingUntil: number; trail: TrailState }
+  >();
 
   constructor(
     onHudSync?: (snapshot: HUDStateSnapshot) => void,
@@ -167,6 +195,7 @@ export class BattleSimulationEngine {
     }
 
     this.setupTitleDemo();
+    void spriteAssets.preload(UNITS.map((d) => d.id));
   }
 
   public setupTitleDemo(): void {
@@ -748,7 +777,7 @@ export class BattleSimulationEngine {
       t.cooldown = Math.max(0, t.cooldown - dt);
 
       const turretX = baseX + dir * 24;
-      const turretY = GROUND_Y - 115 - i * 44;
+      const turretY = GROUND_Y + turretSlotOffsetY(team.era, i);
       const effectiveRange = def.range * (1 + fortressDocLevel * 0.06);
 
       // Find nearest enemy unit within range
@@ -1064,6 +1093,17 @@ export class BattleSimulationEngine {
     if (this.lifecycle === 'playing') {
       soundEngine.playHit(isHeavy);
     }
+    if (splashRadius > 0 || isHeavy) {
+      this.fxSprites.push({
+        x: impactX,
+        y: impactY,
+        name: splashRadius >= 100 ? 'explosion_a' : 'explosion_b',
+        t: 0,
+        dur: 0.42,
+        size: Math.max(60, splashRadius * 1.25),
+      });
+      if (this.fxSprites.length > 40) this.fxSprites.shift();
+    }
 
     if (splashRadius > 0) {
       for (const u of this.units) {
@@ -1339,6 +1379,12 @@ export class BattleSimulationEngine {
       p.alpha = Math.max(0, 1 - p.life / p.maxLife);
     }
 
+    for (let i = this.fxSprites.length - 1; i >= 0; i--) {
+      const f = this.fxSprites[i];
+      f.t += dt;
+      if (f.t >= f.dur) this.fxSprites.splice(i, 1);
+    }
+
     for (const ft of this.floatingTexts) {
       if (!ft.active) continue;
       ft.life += dt;
@@ -1580,11 +1626,29 @@ export class BattleSimulationEngine {
     for (const u of this.units) {
       this.renderUnit(ctx, u);
     }
+    if (this.rigState.size > this.units.length + 64) {
+      const alive = new Set(this.units.map((x) => x.uid));
+      for (const k of this.rigState.keys()) if (!alive.has(k)) this.rigState.delete(k);
+    }
 
     // 8. Render Projectiles
     for (const pr of this.projectiles) {
       if (!pr.active) continue;
       this.renderProjectile(ctx, pr);
+    }
+
+    // 8b. Patlama / efekt sprite'ları
+    for (const f of this.fxSprites) {
+      const sp = spriteAssets.fx.get(f.name);
+      if (!sp) continue;
+      const k = f.t / f.dur;
+      const sz = f.size * (0.55 + 0.6 * Math.sqrt(k));
+      const w = sz;
+      const h = sz * (sp.h / sp.w);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - k * k);
+      ctx.drawImage(sp.img, f.x - w / 2, f.y - h * 0.62, w, h);
+      ctx.restore();
     }
 
     // 9. Render Pooled Particles
@@ -1628,7 +1692,7 @@ export class BattleSimulationEngine {
     ctx.restore(); // end scale
   }
 
-  private renderFortress(
+  private renderFortressLegacy(
     ctx: CanvasRenderingContext2D,
     team: TeamState,
     baseX: number,
@@ -1765,10 +1829,190 @@ export class BattleSimulationEngine {
     ctx.restore();
   }
 
+  /** Çağa göre üs sprite'ı + kule slotları. Görseller yüklenmediyse eski çizime düşer. */
+  private renderFortress(
+    ctx: CanvasRenderingContext2D,
+    team: TeamState,
+    baseX: number,
+    dir: number
+  ): void {
+    const eraIdx = Math.max(0, Math.min(4, team.era));
+    const hpPct = team.hp / Math.max(1, team.maxHp);
+    const state = hpPct > 0.66 ? 'intact' : hpPct > 0.33 ? 'damaged' : 'ruined';
+    const intact = spriteAssets.bases.get(`era${eraIdx}_intact`);
+    const img = spriteAssets.bases.get(`era${eraIdx}_${state}`) ?? intact;
+    if (!img || !intact) {
+      this.renderFortressLegacy(ctx, team, baseX, dir);
+      return;
+    }
+    const k = BASE_VISUAL_WIDTH / intact.w;
+    const bw = img.w * k;
+    const bh = img.h * k;
+    const H = BASE_VISUAL_HEIGHT[eraIdx];
+    const teamColor = team.team === 1 ? '#38bdf8' : '#f87171';
+    const now = performance.now() / 1000;
+
+    ctx.save();
+    ctx.translate(baseX, GROUND_Y);
+
+    // Takım rengi zemin ışıltısı
+    ctx.fillStyle = team.team === 1 ? 'rgba(56,189,248,0.22)' : 'rgba(248,113,113,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(0, 2, BASE_VISUAL_WIDTH * 0.58, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Üs gövdesi
+    ctx.save();
+    if (team.baseHitFlash > 0) (ctx as any).filter = 'brightness(2.2) saturate(0.6)';
+    ctx.scale(dir, 1);
+    ctx.drawImage(img.img, -bw / 2, -bh + 2, bw, bh);
+    ctx.restore();
+
+    // Bayrak (dalgalanır)
+    const flag = spriteAssets.bases.get(`era${eraIdx}_flag`);
+    if (flag) {
+      const fh = 58;
+      const fw = fh * (flag.w / flag.h);
+      ctx.save();
+      ctx.translate(-dir * 66, -H + 8);
+      ctx.rotate(Math.sin(now * 2.2 + eraIdx) * 0.06);
+      ctx.drawImage(flag.img, -fw / 2, -fh, fw, fh);
+      ctx.fillStyle = teamColor;
+      ctx.beginPath();
+      ctx.arc(0, -fh - 4, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Kule direği + slotlar
+    const unlocked = Math.max(1, team.unlockedTurretSlots);
+    const mastTop = turretSlotOffsetY(eraIdx, Math.min(3, unlocked - 1)) + 4;
+    ctx.strokeStyle = 'rgba(15,23,42,0.85)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(dir * 24, -H + 6);
+    ctx.lineTo(dir * 24, mastTop);
+    ctx.stroke();
+
+    const trimColor = ERAS[eraIdx].accentColor;
+    for (let i = 0; i < 4; i++) {
+      const slotX = dir * 24;
+      const slotY = turretSlotOffsetY(eraIdx, i);
+      const isUnlocked = i < team.unlockedTurretSlots;
+      ctx.fillStyle = isUnlocked ? '#1e293b' : 'rgba(15, 23, 42, 0.45)';
+      ctx.strokeStyle = isUnlocked ? trimColor : 'rgba(148, 163, 184, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.fillRect(slotX - 22, slotY + 4, 44, 7);
+      ctx.strokeRect(slotX - 22, slotY + 4, 44, 7);
+
+      const installed = team.turrets[i];
+      if (!installed) continue;
+      const def = getTurretById(installed.turretDefId);
+      if (!def) continue;
+      const tw = spriteAssets.towers.get(TOWER_FOR_TURRET[def.id] ?? '');
+      if (!tw) {
+        ctx.save();
+        ctx.translate(slotX, slotY - 8);
+        ctx.fillStyle = def.primaryColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.rotate(installed.aimAngle);
+        ctx.fillStyle = def.accentColor;
+        ctx.fillRect(4 - installed.recoil * 6, -4, 22, 8);
+        ctx.restore();
+        continue;
+      }
+      const sc = Math.min(46 / tw.base.h, 50 / tw.base.w);
+      const tbw = tw.base.w * sc;
+      const tbh = tw.base.h * sc;
+      ctx.save();
+      ctx.translate(slotX, slotY + 4);
+      ctx.scale(dir, 1);
+      ctx.translate(-installed.recoil * 3.5, installed.recoil * 0.8);
+      ctx.drawImage(tw.base.img, -tbw / 2, -tbh, tbw, tbh);
+      const cfg = TOWER_WEAPON[TOWER_FOR_TURRET[def.id] ?? ''];
+      if (cfg && tw.weapon) {
+        const ws = cfg.scale * sc;
+        const ww = tw.weapon.w * ws;
+        const wh = tw.weapon.h * ws;
+        ctx.save();
+        ctx.translate(-tbw / 2 + cfg.att[0] * tbw, -tbh + cfg.att[1] * tbh + (cfg.bob ? Math.sin(now * 2.4 + i) * 2.5 : 0));
+        if (cfg.aim) ctx.rotate(dir === 1 ? installed.aimAngle : Math.PI - installed.aimAngle);
+        ctx.translate(-installed.recoil * 2, 0);
+        ctx.drawImage(tw.weapon.img, -cfg.piv[0] * ww, -cfg.piv[1] * wh, ww, wh);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // Üs can barı
+    const barW = 128;
+    const barH = 10;
+    const barY = -H - 16 - 3 * 46 - 58;
+    ctx.fillStyle = 'rgba(9, 13, 22, 0.88)';
+    ctx.fillRect(-barW / 2 - 2, barY - 2, barW + 4, barH + 4);
+    const trailPct = Math.max(0, Math.min(1, team.trailingHp / team.maxHp));
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(-barW / 2, barY, barW * trailPct, barH);
+    const hp = Math.max(0, Math.min(1, team.hp / team.maxHp));
+    ctx.fillStyle = team.team === 1 ? '#10b981' : '#ef4444';
+    ctx.fillRect(-barW / 2, barY, barW * hp, barH);
+
+    ctx.restore();
+  }
+
+  /** Birimin ekranda çizileceği yükseklik (hitbox'tan biraz büyük, sprite oranı korunur). */
+  private rigDisplayHeight(u: ActiveUnit, rig: Rig): number {
+    const aspect = rig.bounds.w / rig.bounds.h;
+    let H = u.height * 1.5;
+    if (H * aspect > u.width * 2.1) H = (u.width * 2.1) / aspect;
+    return H;
+  }
+
+  private drawUnitRig(ctx: CanvasRenderingContext2D, u: ActiveUnit, rig: Rig): void {
+    const now = performance.now();
+    let s = this.rigState.get(u.uid);
+    if (!s) {
+      s = { prevState: u.state, impactAt: 0, lastWalk: u.walkDistance, movingUntil: 0, trail: { pts: [] } };
+      this.rigState.set(u.uid, s);
+    }
+    if (s.prevState === 'windup' && u.state !== 'windup') s.impactAt = now;
+    s.prevState = u.state;
+    if (Math.abs(u.walkDistance - s.lastWalk) > 0.02) s.movingUntil = now + 140;
+    s.lastWalk = u.walkDistance;
+
+    // Saldırı animasyonu: windup -> vuruş anı (u=0.5, hasar burada verilir) -> toparlanma
+    const recoverMs = Math.max(280, Math.min(600, u.attackInterval * 450));
+    let pose;
+    if (u.state === 'ko') {
+      pose = computePose(rig, { mode: 'idle', phase: 0 });
+    } else if (u.state === 'windup') {
+      const prog = 1 - u.stateTimer / Math.max(0.05, u.windupTime);
+      pose = computePose(rig, { mode: 'attack', u: 0.5 * Math.max(0, Math.min(1, prog)) });
+    } else if (s.impactAt && now - s.impactAt < recoverMs) {
+      pose = computePose(rig, { mode: 'attack', u: 0.5 + (0.5 * (now - s.impactAt)) / recoverMs });
+    } else if (now < s.movingUntil) {
+      pose = computePose(rig, { mode: 'walk', phase: u.walkDistance / Math.max(20, u.moveSpeed) });
+    } else {
+      pose = computePose(rig, { mode: 'idle', phase: now / 1000 + u.uid * 0.37 });
+    }
+    drawRig(ctx, rig, pose, {
+      x: 0,
+      y: 0,
+      height: this.rigDisplayHeight(u, rig),
+      trail: s.trail,
+      now,
+      filter: u.hitFlashTimer > 0 ? 'brightness(2.4) saturate(0.4)' : undefined,
+    });
+  }
+
   private renderUnit(ctx: CanvasRenderingContext2D, u: ActiveUnit): void {
     const dir = u.team === 1 ? 1 : -1;
+    const rig = spriteAssets.rigs.get(u.defId);
+    const topY = rig ? this.rigDisplayHeight(u, rig) : u.height;
     const walkBob =
-      u.state === 'walk' ? Math.sin(u.walkDistance * 0.085) * 4 : 0;
+      !rig && u.state === 'walk' ? Math.sin(u.walkDistance * 0.085) * 4 : 0;
     const strideAngle =
       u.state === 'walk' ? Math.sin(u.walkDistance * 0.085) * 0.25 : 0;
 
@@ -1787,7 +2031,7 @@ export class BattleSimulationEngine {
     ctx.fill();
 
     // Windup Telegraph Warning Glow for heavy/charger/colossus attacks
-    if (u.state === 'windup') {
+    if (u.state === 'windup' && !rig) {
       const progress = 1 - u.stateTimer / Math.max(0.05, u.windupTime);
       ctx.strokeStyle = u.accentColor;
       ctx.lineWidth = 2.5;
@@ -1801,7 +2045,18 @@ export class BattleSimulationEngine {
     const teamBadge = u.team === 1 ? '#38bdf8' : '#f87171';
 
     // Distinct Silhouette per Archetype
-    if (u.archetype === 'charger') {
+    if (rig) {
+      // Takım halkası (düşman/dost ayrımı)
+      ctx.save();
+      ctx.strokeStyle = teamBadge;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Math.max(14, u.width * 0.55), 5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      this.drawUnitRig(ctx, u, rig);
+    } else if (u.archetype === 'charger') {
       // Mounted Cavalry / Dino / Tank / Hover-Tank
       ctx.fillStyle = bodyFill;
       ctx.strokeStyle = trimFill;
@@ -1881,7 +2136,7 @@ export class BattleSimulationEngine {
     // Team identification plume
     ctx.fillStyle = teamBadge;
     ctx.beginPath();
-    ctx.arc(0, -u.height - 4, 3.5, 0, Math.PI * 2);
+    ctx.arc(0, -topY - 6, 3.5, 0, Math.PI * 2);
     ctx.fill();
 
     // Shield Bubble if active
@@ -1900,7 +2155,7 @@ export class BattleSimulationEngine {
       const bw = Math.max(30, u.width * 0.85);
       const bh = 5;
       const bx = u.x - bw / 2;
-      const by = u.y - u.height - 16;
+      const by = u.y - topY - 16;
 
       ctx.fillStyle = 'rgba(9, 13, 22, 0.85)';
       ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
@@ -1925,6 +2180,19 @@ export class BattleSimulationEngine {
     ctx.save();
     ctx.translate(pr.x, pr.y);
     ctx.rotate(pr.rotation);
+
+    // Görselli mermi (yüklendiyse)
+    const spec = PROJECTILE_SPRITES[pr.type];
+    const sp = spec ? spriteAssets.fx.get(spec.name) : undefined;
+    if (spec && sp) {
+      const w = spec.len;
+      const h = w * (sp.h / sp.w);
+      if (spec.heading) ctx.rotate(-spec.heading);
+      if (spec.spin) ctx.rotate(pr.life * spec.spin);
+      ctx.drawImage(sp.img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+      return;
+    }
 
     if (pr.type === 'laser' || pr.type === 'ion' || pr.type === 'tesla') {
       ctx.fillStyle = '#ffffff';

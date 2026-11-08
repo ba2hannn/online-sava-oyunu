@@ -1,0 +1,167 @@
+{
+ "id": "era4_charger",
+ "label": "Siber Hover-Tank",
+ "loco": "hover",
+ "attack": "cannon",
+ "params": {},
+ "nodes": [
+  {
+   "name": "hull",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "hull.png"
+   ],
+   "w": 532,
+   "h": 183
+  },
+  {
+   "name": "padA",
+   "parent": "hull",
+   "att": [
+    0.18,
+    0.92
+   ],
+   "piv": [
+    0.5,
+    0.15
+   ],
+   "z": -1,
+   "role": "pad",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "padA.png"
+   ],
+   "w": 182,
+   "h": 76
+  },
+  {
+   "name": "padB",
+   "parent": "hull",
+   "att": [
+    0.5,
+    0.92
+   ],
+   "piv": [
+    0.5,
+    0.15
+   ],
+   "z": -1,
+   "role": "pad",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "padB.png"
+   ],
+   "w": 182,
+   "h": 75
+  },
+  {
+   "name": "padC",
+   "parent": "hull",
+   "att": [
+    0.82,
+    0.92
+   ],
+   "piv": [
+    0.5,
+    0.15
+   ],
+   "z": -1,
+   "role": "pad",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "padC.png"
+   ],
+   "w": 182,
+   "h": 75
+  },
+  {
+   "name": "flame",
+   "parent": "hull",
+   "att": [
+    0.02,
+    0.55
+   ],
+   "piv": [
+    1.0,
+    0.5
+   ],
+   "z": -2,
+   "role": "flame",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "flame.png",
+    "flame_1.png",
+    "flame_2.png"
+   ],
+   "w": 219,
+   "h": 70
+  },
+  {
+   "name": "turret",
+   "parent": "hull",
+   "att": [
+    0.45,
+    0.1
+   ],
+   "piv": [
+    0.31,
+    0.85
+   ],
+   "z": 2,
+   "role": "turret",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "turret.png"
+   ],
+   "w": 353,
+   "h": 101
+  }
+ ]
+}

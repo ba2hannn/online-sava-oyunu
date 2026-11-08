@@ -1,0 +1,169 @@
+{
+ "id": "era3_swarmer",
+ "label": "Taarruz Komandosu",
+ "loco": "biped",
+ "attack": "stab",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 146,
+   "h": 293
+  },
+  {
+   "name": "legs",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.93
+   ],
+   "piv": [
+    0.5,
+    0.05
+   ],
+   "z": -2,
+   "role": "legsPair",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legs.png",
+    "legs_1.png"
+   ],
+   "w": 192,
+   "h": 288
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.42
+   ],
+   "piv": [
+    0.1,
+    0.15
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": -8,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 163,
+   "h": 133
+  },
+  {
+   "name": "rifle",
+   "parent": "armF",
+   "att": [
+    0.9,
+    0.62
+   ],
+   "piv": [
+    0.38,
+    0.6
+   ],
+   "z": 1,
+   "role": "rifle",
+   "rest": -5,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rifle.png"
+   ],
+   "w": 209,
+   "h": 105
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.45,
+    0.42
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 4,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 88,
+   "h": 183
+  },
+  {
+   "name": "knife",
+   "parent": "armB",
+   "att": [
+    0.5,
+    0.95
+   ],
+   "piv": [
+    0.5,
+    0.8
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": 60,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "knife.png"
+   ],
+   "w": 40,
+   "h": 152
+  }
+ ]
+}

@@ -1,0 +1,165 @@
+{
+ "id": "era3_charger",
+ "label": "Zırhlı Kruvazör Tankı",
+ "loco": "vehicle",
+ "attack": "cannon",
+ "params": {},
+ "nodes": [
+  {
+   "name": "hull",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "hull.png"
+   ],
+   "w": 493,
+   "h": 167
+  },
+  {
+   "name": "exhaust",
+   "parent": "hull",
+   "att": [
+    0.04,
+    0.4
+   ],
+   "piv": [
+    0.9,
+    0.5
+   ],
+   "z": -1,
+   "role": "puff",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "exhaust.png"
+   ],
+   "w": 58,
+   "h": 63
+  },
+  {
+   "name": "antenna",
+   "parent": "hull",
+   "att": [
+    0.12,
+    0.06
+   ],
+   "piv": [
+    0.5,
+    0.98
+   ],
+   "z": -1,
+   "role": "antenna",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.8,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "antenna.png"
+   ],
+   "w": 43,
+   "h": 186
+  },
+  {
+   "name": "barrel",
+   "parent": "hull",
+   "att": [
+    0.78,
+    0.14
+   ],
+   "piv": [
+    0.02,
+    0.5
+   ],
+   "z": -1,
+   "role": "barrel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 0.6,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "barrel.png"
+   ],
+   "w": 363,
+   "h": 45
+  },
+  {
+   "name": "turret",
+   "parent": "hull",
+   "att": [
+    0.55,
+    0.07
+   ],
+   "piv": [
+    0.35,
+    0.95
+   ],
+   "z": 2,
+   "role": "turret",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "turret.png"
+   ],
+   "w": 254,
+   "h": 111
+  },
+  {
+   "name": "flash",
+   "parent": "barrel",
+   "att": [
+    0.99,
+    0.5
+   ],
+   "piv": [
+    0.05,
+    0.5
+   ],
+   "z": 3,
+   "role": "flash",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.2,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "flash.png"
+   ],
+   "w": 106,
+   "h": 88
+  }
+ ]
+}

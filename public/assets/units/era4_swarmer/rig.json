@@ -1,0 +1,174 @@
+{
+ "id": "era4_swarmer",
+ "label": "Plazma Muhafızı",
+ "loco": "biped",
+ "attack": "smashUp",
+ "params": {
+  "weaponIsArm": true,
+  "attackParams": {
+   "aW": -45,
+   "aS": 105
+  }
+ },
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 133,
+   "h": 269
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.88
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 93,
+   "h": 233
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.45,
+    0.45
+   ],
+   "piv": [
+    0.5,
+    0.12
+   ],
+   "z": -3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 84,
+   "h": 188
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.88
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 85,
+   "h": 245
+  },
+  {
+   "name": "shield",
+   "parent": "armB",
+   "att": [
+    0.55,
+    0.95
+   ],
+   "piv": [
+    0.5,
+    0.7
+   ],
+   "z": 1,
+   "role": "shield",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "shield.png"
+   ],
+   "w": 90,
+   "h": 141
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.56,
+    0.45
+   ],
+   "piv": [
+    0.08,
+    0.2
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": [
+    0.97,
+    0.0
+   ],
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "armF.png"
+   ],
+   "w": 242,
+   "h": 230
+  }
+ ]
+}

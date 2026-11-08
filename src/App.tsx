@@ -235,6 +235,7 @@ export default function App() {
       }
     );
     engineRef.current = engine;
+    if (import.meta.env.DEV) (window as unknown as { __engine?: unknown }).__engine = engine;
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('autostart') === '1') {

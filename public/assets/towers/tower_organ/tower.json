@@ -1,0 +1,18 @@
+{
+ "id": "tower_organ",
+ "label": "Çoklu Organ Topu",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 144,
+   "h": 113
+  },
+  {
+   "name": "weapon",
+   "file": "weapon.png",
+   "w": 90,
+   "h": 107
+  }
+ ]
+}

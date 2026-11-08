@@ -1,0 +1,168 @@
+{
+ "id": "era0_charger",
+ "label": "Raptor Süvarisi",
+ "loco": "mount",
+ "attack": "stab",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 460,
+   "h": 258
+  },
+  {
+   "name": "legH",
+   "parent": "body",
+   "att": [
+    0.54,
+    0.63
+   ],
+   "piv": [
+    0.35,
+    0.1
+   ],
+   "z": -1,
+   "role": "mlegF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legH.png"
+   ],
+   "w": 99,
+   "h": 200
+  },
+  {
+   "name": "clawF",
+   "parent": "body",
+   "att": [
+    0.72,
+    0.84
+   ],
+   "piv": [
+    0.08,
+    0.5
+   ],
+   "z": 1,
+   "role": "mlegB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "clawF.png"
+   ],
+   "w": 116,
+   "h": 65
+  },
+  {
+   "name": "rider",
+   "parent": "body",
+   "att": [
+    0.6,
+    0.49
+   ],
+   "piv": [
+    0.5,
+    0.78
+   ],
+   "z": 1,
+   "role": "rider",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rider.png"
+   ],
+   "w": 108,
+   "h": 247
+  },
+  {
+   "name": "armR",
+   "parent": "rider",
+   "att": [
+    0.55,
+    0.42
+   ],
+   "piv": [
+    0.3,
+    0.12
+   ],
+   "z": 2,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armR.png"
+   ],
+   "w": 73,
+   "h": 109
+  },
+  {
+   "name": "spear",
+   "parent": "armR",
+   "att": [
+    0.8,
+    0.85
+   ],
+   "piv": [
+    0.5,
+    0.55
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": 78,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "spear.png"
+   ],
+   "w": 37,
+   "h": 257
+  }
+ ]
+}

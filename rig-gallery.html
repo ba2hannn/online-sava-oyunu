@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Karakter Animasyon Galerisi</title>
+<style>
+  body{margin:0;background:#1d2433;color:#e8ecf5;font-family:system-ui,sans-serif}
+  h1{font-size:18px;margin:12px;text-align:center}
+  .bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px}
+  button{background:#334;color:#fff;border:1px solid #556;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer}
+  button.on{background:#e0892b;border-color:#e0892b}
+  label{font-size:13px}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;padding:10px}
+  .cell{background:#2a3347;border-radius:10px;overflow:hidden;text-align:center}
+  canvas{width:100%;display:block;background:linear-gradient(#9ed0ee 0%,#d9eef7 66%,#7a5c3a 66%,#5b4228 100%)}
+  .cell div{font-size:12px;padding:4px}
+</style>
+</head>
+<body>
+<h1>Karakter animasyon galerisi</h1>
+<div class="bar" id="modes"></div>
+<div class="bar">
+  <label>Hız <input type="range" id="speed" min="0.3" max="2" step="0.1" value="1"></label>
+  <label><input type="checkbox" id="dbg"> Pivotlar</label>
+  <label><input type="checkbox" id="freeze"> Sabitle u=<input type="range" id="u" min="0" max="1" step="0.01" value="0.3" style="width:120px"></label>
+  <label>Çağ <select id="era"><option value="all">Hepsi</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+  <label>Tür <select id="kind"><option value="all">Hepsi</option><option value="swarmer">Yakın</option><option value="ranger">Menzilli</option><option value="charger">Süvari/Araç</option><option value="colossus">Dev</option></select></label>
+</div>
+<div id="grid"></div>
+<script type="module" src="/src/rigGallery.ts"></script>
+</body>
+</html>

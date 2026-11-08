@@ -1,0 +1,165 @@
+{
+ "id": "era1_colossus",
+ "label": "Demir Kuşatma Kulesi",
+ "loco": "tower",
+ "attack": "ram",
+ "params": {},
+ "nodes": [
+  {
+   "name": "tower",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "tower.png"
+   ],
+   "w": 330,
+   "h": 498
+  },
+  {
+   "name": "pusher2",
+   "parent": "tower",
+   "att": [
+    0.03,
+    0.97
+   ],
+   "piv": [
+    0.5,
+    1.0
+   ],
+   "z": -2,
+   "role": "pusher2",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "pusher2.png"
+   ],
+   "w": 95,
+   "h": 122
+  },
+  {
+   "name": "pusher",
+   "parent": "tower",
+   "att": [
+    -0.04,
+    0.97
+   ],
+   "piv": [
+    0.5,
+    1.0
+   ],
+   "z": -2,
+   "role": "pusher",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "pusher.png"
+   ],
+   "w": 110,
+   "h": 124
+  },
+  {
+   "name": "wheelA",
+   "parent": "tower",
+   "att": [
+    0.147,
+    0.89
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "wheel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 0.74,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "wheelA.png"
+   ],
+   "w": 134,
+   "h": 141
+  },
+  {
+   "name": "wheelB",
+   "parent": "tower",
+   "att": [
+    0.5,
+    0.89
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "wheel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 0.74,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "wheelB.png"
+   ],
+   "w": 134,
+   "h": 141
+  },
+  {
+   "name": "ramp",
+   "parent": "tower",
+   "att": [
+    0.97,
+    0.2
+   ],
+   "piv": [
+    0.08,
+    0.1
+   ],
+   "z": 2,
+   "role": "ramp",
+   "rest": 40,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "ramp.png"
+   ],
+   "w": 228,
+   "h": 207
+  }
+ ]
+}

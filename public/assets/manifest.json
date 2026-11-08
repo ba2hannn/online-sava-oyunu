@@ -1,0 +1,35 @@
+{
+ "units": [
+  "era0_swarmer",
+  "era0_ranger",
+  "era0_charger",
+  "era0_colossus",
+  "era1_swarmer",
+  "era1_ranger",
+  "era1_charger",
+  "era1_colossus",
+  "era2_swarmer",
+  "era2_ranger",
+  "era2_charger",
+  "era2_colossus",
+  "era3_swarmer",
+  "era3_ranger",
+  "era3_charger",
+  "era3_colossus",
+  "era4_swarmer",
+  "era4_ranger",
+  "era4_charger"
+ ],
+ "towers": [
+  "tower_bone_arrow",
+  "tower_volcano",
+  "tower_crossbow",
+  "tower_trebuchet",
+  "tower_organ",
+  "tower_mortar",
+  "tower_vulcan",
+  "tower_patriot",
+  "tower_ion",
+  "tower_tesla"
+ ]
+}

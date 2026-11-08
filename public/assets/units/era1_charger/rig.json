@@ -1,0 +1,168 @@
+{
+ "id": "era1_charger",
+ "label": "Ağır Mızraklı Şövalye",
+ "loco": "mount",
+ "attack": "stab",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 353,
+   "h": 335
+  },
+  {
+   "name": "tail",
+   "parent": "body",
+   "att": [
+    0.04,
+    0.38
+   ],
+   "piv": [
+    0.5,
+    0.05
+   ],
+   "z": -1,
+   "role": "tail",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "tail.png"
+   ],
+   "w": 91,
+   "h": 129
+  },
+  {
+   "name": "rider",
+   "parent": "body",
+   "att": [
+    0.42,
+    0.3
+   ],
+   "piv": [
+    0.45,
+    0.95
+   ],
+   "z": 1,
+   "role": "rider",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rider.png"
+   ],
+   "w": 148,
+   "h": 269
+  },
+  {
+   "name": "shield",
+   "parent": "rider",
+   "att": [
+    0.62,
+    0.62
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "shield",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.8,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "shield.png"
+   ],
+   "w": 87,
+   "h": 135
+  },
+  {
+   "name": "armR",
+   "parent": "rider",
+   "att": [
+    0.55,
+    0.45
+   ],
+   "piv": [
+    0.15,
+    0.25
+   ],
+   "z": 2,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armR.png"
+   ],
+   "w": 105,
+   "h": 94
+  },
+  {
+   "name": "lance",
+   "parent": "armR",
+   "att": [
+    0.9,
+    0.55
+   ],
+   "piv": [
+    0.5,
+    0.62
+   ],
+   "z": 4,
+   "role": "weapon",
+   "rest": 82,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "lance.png"
+   ],
+   "w": 111,
+   "h": 407
+  }
+ ]
+}

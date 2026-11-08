@@ -1,0 +1,143 @@
+{
+ "id": "era2_swarmer",
+ "label": "Yatağanlı Muhafız",
+ "loco": "biped",
+ "attack": "slash",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 161,
+   "h": 389
+  },
+  {
+   "name": "legs",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.8
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legsPair",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legs.png",
+    "legs_1.png"
+   ],
+   "w": 145,
+   "h": 237
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.45,
+    0.4
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 86,
+   "h": 205
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.4
+   ],
+   "piv": [
+    0.12,
+    0.15
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 151,
+   "h": 134
+  },
+  {
+   "name": "sword",
+   "parent": "armF",
+   "att": [
+    0.95,
+    0.75
+   ],
+   "piv": [
+    0.5,
+    0.85
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": 50,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "sword.png"
+   ],
+   "w": 66,
+   "h": 299
+  }
+ ]
+}

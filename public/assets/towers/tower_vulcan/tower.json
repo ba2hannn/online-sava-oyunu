@@ -1,0 +1,12 @@
+{
+ "id": "tower_vulcan",
+ "label": "Vulcan Otomatik Top",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 164,
+   "h": 114
+  }
+ ]
+}
