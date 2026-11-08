@@ -12,6 +12,9 @@ const __dirname = path.dirname(__filename);
 
 interface RoomPlayer {
   id: string;
+  /** Stable per-browser-tab id sent by the client; used to recognise reconnects. */
+  sessionId: string;
+  connected: boolean;
   name: string;
   team: 1 | 2;
   ws: WebSocket;
@@ -37,6 +40,29 @@ interface GameRoom {
 }
 
 const rooms = new Map<string, GameRoom>();
+
+const MAX_COMMAND_HISTORY = 500;
+const RECONNECT_GRACE_MS = 15000;
+
+function readSessionId(data: { sessionId?: unknown }, fallback: string): string {
+  const raw = typeof data.sessionId === 'string' ? data.sessionId.trim() : '';
+  return raw.length >= 6 && raw.length <= 80 ? raw : fallback;
+}
+
+function roster(room: GameRoom) {
+  return room.players.map((p) => ({ id: p.id, name: p.name, team: p.team, connected: p.connected }));
+}
+
+function rememberCommandId(room: GameRoom, id: string) {
+  room.processedCommandIds.add(id);
+  if (room.processedCommandIds.size > MAX_COMMAND_HISTORY * 4) {
+    let toDrop = room.processedCommandIds.size - MAX_COMMAND_HISTORY * 2;
+    for (const old of room.processedCommandIds) {
+      if (toDrop-- <= 0) break;
+      room.processedCommandIds.delete(old);
+    }
+  }
+}
 const lobbySockets = new Set<WebSocket>();
 
 function generateRoomCode(): string {
@@ -153,7 +179,16 @@ async function startServer() {
   wss.on('connection', (ws) => {
     const clientId = `cmd_${Math.random().toString(36).slice(2, 10)}`;
     let currentRoomCode: string | null = null;
+    let sessionId = clientId;
     lobbySockets.add(ws);
+
+    // A socket can only be seated in one room: leave the previous one before taking a new seat.
+    const leaveCurrentRoomIfAny = (nextCode?: string) => {
+      if (currentRoomCode && currentRoomCode !== nextCode) {
+        handlePlayerLeave(currentRoomCode, clientId, true);
+        currentRoomCode = null;
+      }
+    };
 
     // Welcome payload with initial synchronized state
     ws.send(
@@ -206,6 +241,7 @@ async function startServer() {
 
         // Create Room
         if (data.type === 'CREATE_ROOM') {
+          sessionId = readSessionId(data, sessionId);
           const code = (data.code && String(data.code).trim().length >= 3)
             ? String(data.code).trim().toUpperCase().slice(0, 8)
             : generateRoomCode();
@@ -223,9 +259,12 @@ async function startServer() {
           const playerName = String(data.playerName || 'Komutan 1').trim().slice(0, 24);
           const roomTitle = String(data.title || `${playerName}'in Karargahı`).trim().slice(0, 36);
           const isPrivate = Boolean(data.isPrivate);
+          leaveCurrentRoomIfAny();
 
           const player: RoomPlayer = {
             id: clientId,
+            sessionId,
+            connected: true,
             name: playerName,
             team: 1,
             ws,
@@ -281,10 +320,17 @@ async function startServer() {
 
         // Join Room
         if (data.type === 'JOIN_ROOM') {
+          sessionId = readSessionId(data, sessionId);
           const code = String(data.code || '')
             .trim()
             .toUpperCase();
           const room = rooms.get(code);
+          const isResume = Boolean(data.resume);
+
+          if (!room && isResume) {
+            ws.send(JSON.stringify({ type: 'RESUME_FAILED', code }));
+            return;
+          }
 
           if (!room) {
             ws.send(
@@ -296,14 +342,26 @@ async function startServer() {
             return;
           }
 
-          // Reconnect check
-          const existing = room.players.find((p) => p.id === clientId || p.name === data.playerName);
+          // Reconnect check: identify the player by their session id only. Matching by name
+          // let a guest named like the host (both default to "Komutan") steal the host's seat,
+          // leaving two "team 1" clients that never exchanged snapshots.
+          const existing = room.players.find((p) => p.sessionId === sessionId);
           if (existing) {
+            if (existing.ws !== ws && existing.ws.readyState === WebSocket.OPEN) {
+              // Same session reconnecting before the old socket noticed it was dead.
+              try {
+                existing.ws.close();
+              } catch {
+                /* ignore */
+              }
+            }
             existing.ws = ws;
+            existing.id = clientId;
+            existing.connected = true;
             currentRoomCode = code;
             lobbySockets.delete(ws);
 
-            if (room.disconnectTimer) {
+            if (room.disconnectTimer && room.players.every((p) => p.connected)) {
               clearTimeout(room.disconnectTimer);
               room.disconnectTimer = null;
             }
@@ -314,8 +372,9 @@ async function startServer() {
                 code: room.code,
                 team: existing.team,
                 status: room.status,
+                title: room.title,
+                players: roster(room),
                 lastSnapshot: room.lastSnapshot,
-                commandHistory: room.commandHistory,
               })
             );
 
@@ -328,7 +387,13 @@ async function startServer() {
             return;
           }
 
-          if (room.players.length >= 2) {
+          if (isResume) {
+            // Our seat is gone (we left / the match was closed): never take a new seat silently.
+            ws.send(JSON.stringify({ type: 'RESUME_FAILED', code }));
+            return;
+          }
+
+          if (room.players.length >= 2 || room.status !== 'waiting') {
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
@@ -339,8 +404,11 @@ async function startServer() {
           }
 
           const guestName = String(data.playerName || 'Komutan 2').trim().slice(0, 24);
+          leaveCurrentRoomIfAny(code);
           const guestPlayer: RoomPlayer = {
             id: clientId,
+            sessionId,
+            connected: true,
             name: guestName,
             team: 2,
             ws,
@@ -397,7 +465,9 @@ async function startServer() {
 
         // Quick Match
         if (data.type === 'QUICK_MATCH') {
+          sessionId = readSessionId(data, sessionId);
           const playerName = String(data.playerName || 'Savaşçı').trim().slice(0, 24);
+          leaveCurrentRoomIfAny();
 
           // Find open waiting room
           let openRoom: GameRoom | undefined;
@@ -406,6 +476,7 @@ async function startServer() {
               !r.isPrivate &&
               r.status === 'waiting' &&
               r.players.length === 1 &&
+              r.players[0].sessionId !== sessionId &&
               r.players[0].ws.readyState === WebSocket.OPEN
             ) {
               openRoom = r;
@@ -416,6 +487,8 @@ async function startServer() {
           if (openRoom) {
             const guestPlayer: RoomPlayer = {
               id: clientId,
+              sessionId,
+              connected: true,
               name: playerName,
               team: 2,
               ws,
@@ -470,6 +543,8 @@ async function startServer() {
             const code = generateRoomCode();
             const player: RoomPlayer = {
               id: clientId,
+              sessionId,
+              connected: true,
               name: playerName,
               team: 1,
               ws,
@@ -525,25 +600,33 @@ async function startServer() {
           const room = rooms.get(currentRoomCode);
           if (!room || room.status !== 'playing') return;
 
+          const sender = room.players.find((p) => p.id === clientId);
+          if (!sender || !data.command || typeof data.command !== 'object') return;
+
           const cmdId = String(data.cmdId || `${clientId}_${Date.now()}_${Math.random()}`);
           if (room.processedCommandIds.has(cmdId)) return;
-          room.processedCommandIds.add(cmdId);
+          rememberCommandId(room, cmdId);
 
+          // A player may only command their own team, whatever the client claims.
+          const command = { ...data.command, team: sender.team };
           const entry = {
             id: cmdId,
-            team: data.team as 1 | 2,
-            command: data.command,
+            team: sender.team,
+            command,
             ts: Date.now(),
           };
           room.commandHistory.push(entry);
+          if (room.commandHistory.length > MAX_COMMAND_HISTORY) {
+            room.commandHistory.splice(0, room.commandHistory.length - MAX_COMMAND_HISTORY);
+          }
 
-          // Relay to both (or to the other player) with authoritative server timestamp
+          // Relay to the other player with authoritative server timestamp
           broadcastToRoom(room, {
             type: 'REMOTE_BATTLE_COMMAND',
             cmdId,
             senderId: clientId,
-            team: data.team,
-            command: data.command,
+            team: sender.team,
+            command,
             serverTs: entry.ts,
           }, ws);
           return;
@@ -553,6 +636,9 @@ async function startServer() {
         if (data.type === 'STATE_SNAPSHOT' && currentRoomCode) {
           const room = rooms.get(currentRoomCode);
           if (!room || room.status !== 'playing') return;
+          // Only the authoritative host (team 1) may publish world state.
+          const publisher = room.players.find((p) => p.id === clientId);
+          if (!publisher || publisher.team !== 1 || !data.snapshot) return;
 
           room.lastSnapshot = data.snapshot;
           room.lastSnapshotTime = Date.now();
@@ -574,8 +660,13 @@ async function startServer() {
         if (data.type === 'MATCH_FINISH' && currentRoomCode) {
           const room = rooms.get(currentRoomCode);
           if (!room || room.status === 'finished') return;
+          if (!room.players.some((p) => p.id === clientId)) return;
 
           room.status = 'finished';
+          if (room.disconnectTimer) {
+            clearTimeout(room.disconnectTimer);
+            room.disconnectTimer = null;
+          }
           const winnerTeam = Number(data.winnerTeam) || 1;
           const winnerPlayer = room.players.find((p) => p.team === winnerTeam);
           const winnerName = winnerPlayer?.name || (winnerTeam === 1 ? room.hostName : (room.guestName || 'Bilinmeyen'));
@@ -630,7 +721,7 @@ async function startServer() {
 
         // Leave Room
         if (data.type === 'LEAVE_ROOM' && currentRoomCode) {
-          handlePlayerLeave(currentRoomCode, clientId);
+          handlePlayerLeave(currentRoomCode, clientId, true);
           currentRoomCode = null;
           lobbySockets.add(ws);
         }
@@ -642,51 +733,78 @@ async function startServer() {
     ws.on('close', () => {
       lobbySockets.delete(ws);
       if (currentRoomCode) {
-        handlePlayerLeave(currentRoomCode, clientId);
+        // An unexpected disconnect keeps the seat for a grace period so the player can resume.
+        handlePlayerLeave(currentRoomCode, clientId, false);
       }
     });
   });
 
-  function handlePlayerLeave(roomCode: string, clientId: string) {
+  function finishByForfeit(room: GameRoom) {
+    if (room.status !== 'playing') return;
+    const remaining = room.players.find((p) => p.connected);
+    if (!remaining) {
+      // Nobody came back: close the room silently.
+      room.status = 'finished';
+      gameDb.closeRoom(room.code);
+      rooms.delete(room.code);
+      return;
+    }
+    room.status = 'finished';
+    gameDb.recordMatchResult({
+      roomCode: room.code,
+      player1Name: room.hostName,
+      player2Name: room.guestName || 'Rakip',
+      winnerTeam: remaining.team,
+      winnerName: remaining.name,
+      durationSeconds: room.startedAt ? (Date.now() - room.startedAt) / 1000 : 30,
+    });
+    broadcastToRoom(room, {
+      type: 'MATCH_OVER',
+      winnerTeam: remaining.team,
+      winnerName: remaining.name,
+      reason: 'Rakip oyundan ayrıldı.',
+    });
+  }
+
+  function handlePlayerLeave(roomCode: string, clientId: string, intentional: boolean) {
     const room = rooms.get(roomCode);
     if (!room) return;
 
     const leavingPlayer = room.players.find((p) => p.id === clientId);
-    room.players = room.players.filter((p) => p.id !== clientId);
+    if (!leavingPlayer) return;
 
-    if (room.players.length === 0) {
+    if (room.status === 'playing' && !intentional) {
+      // Keep the seat (team assignment, name, session) so a reconnect resumes the same side.
+      leavingPlayer.connected = false;
+      broadcastToRoom(room, {
+        type: 'PLAYER_DISCONNECTED',
+        playerName: leavingPlayer.name,
+        team: leavingPlayer.team,
+      });
+    } else {
+      room.players = room.players.filter((p) => p !== leavingPlayer);
+      if (room.players.length > 0) {
+        broadcastToRoom(room, {
+          type: 'PLAYER_LEFT',
+          leftPlayerId: clientId,
+          leftPlayerName: leavingPlayer.name,
+        });
+      }
+    }
+
+    const anyConnected = room.players.some((p) => p.connected);
+    if (room.players.length === 0 || (!anyConnected && room.status !== 'playing')) {
+      if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
       gameDb.closeRoom(roomCode);
       rooms.delete(roomCode);
-    } else {
-      broadcastToRoom(room, {
-        type: 'PLAYER_LEFT',
-        leftPlayerId: clientId,
-        leftPlayerName: leavingPlayer?.name,
-      });
-
-      // If playing and a player left, grace period before auto-win
-      if (room.status === 'playing') {
-        const remaining = room.players[0];
-        room.disconnectTimer = setTimeout(() => {
-          if (room.status === 'playing' && room.players.length === 1) {
-            room.status = 'finished';
-            gameDb.recordMatchResult({
-              roomCode: room.code,
-              player1Name: room.hostName,
-              player2Name: room.guestName || 'Rakip',
-              winnerTeam: remaining.team,
-              winnerName: remaining.name,
-              durationSeconds: room.startedAt ? (Date.now() - room.startedAt) / 1000 : 30,
-            });
-            broadcastToRoom(room, {
-              type: 'MATCH_OVER',
-              winnerTeam: remaining.team,
-              winnerName: remaining.name,
-              reason: 'Rakip oyundan ayrıldı.',
-            });
-          }
-        }, 15000);
-      }
+    } else if (room.status === 'playing') {
+      // Grace period before the remaining player is awarded the win.
+      if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
+      room.disconnectTimer = setTimeout(() => {
+        room.disconnectTimer = null;
+        const everyoneBack = room.players.length === 2 && room.players.every((p) => p.connected);
+        if (!everyoneBack) finishByForfeit(room);
+      }, RECONNECT_GRACE_MS);
     }
 
     broadcastToLobby({
