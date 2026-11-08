@@ -6,5 +6,7 @@ dist-server
 data/*.db
 data/*.db-wal
 data/*.db-shm
+karaktergorselleri/
+.vercel
 *.log
 .DS_Store
