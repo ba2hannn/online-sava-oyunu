@@ -6,6 +6,7 @@ import {
   WORLD_WIDTH,
   BASE_VISUAL_HEIGHT,
   BASE_VISUAL_WIDTH,
+  TURRET_SLOT_SPACING,
   UNITS,
   getTurretById,
   turretSlotOffsetY,
@@ -1871,10 +1872,10 @@ export class BattleSimulationEngine {
     // Bayrak (dalgalanır)
     const flag = spriteAssets.bases.get(`era${eraIdx}_flag`);
     if (flag) {
-      const fh = 58;
+      const fh = 84;
       const fw = fh * (flag.w / flag.h);
       ctx.save();
-      ctx.translate(-dir * 66, -H + 8);
+      ctx.translate(-dir * 84, -H + 8);
       ctx.rotate(Math.sin(now * 2.2 + eraIdx) * 0.06);
       ctx.drawImage(flag.img, -fw / 2, -fh, fw, fh);
       ctx.fillStyle = teamColor;
@@ -1902,8 +1903,8 @@ export class BattleSimulationEngine {
       ctx.fillStyle = isUnlocked ? '#1e293b' : 'rgba(15, 23, 42, 0.45)';
       ctx.strokeStyle = isUnlocked ? trimColor : 'rgba(148, 163, 184, 0.25)';
       ctx.lineWidth = 2;
-      ctx.fillRect(slotX - 22, slotY + 4, 44, 7);
-      ctx.strokeRect(slotX - 22, slotY + 4, 44, 7);
+      ctx.fillRect(slotX - 38, slotY + 4, 76, 9);
+      ctx.strokeRect(slotX - 38, slotY + 4, 76, 9);
 
       const installed = team.turrets[i];
       if (!installed) continue;
@@ -1923,13 +1924,13 @@ export class BattleSimulationEngine {
         ctx.restore();
         continue;
       }
-      const sc = Math.min(46 / tw.base.h, 50 / tw.base.w);
+      const sc = Math.min(76 / tw.base.h, 86 / tw.base.w);
       const tbw = tw.base.w * sc;
       const tbh = tw.base.h * sc;
       ctx.save();
       ctx.translate(slotX, slotY + 4);
       ctx.scale(dir, 1);
-      ctx.translate(-installed.recoil * 3.5, installed.recoil * 0.8);
+      ctx.translate(-installed.recoil * 6, installed.recoil * 1.4);
       ctx.drawImage(tw.base.img, -tbw / 2, -tbh, tbw, tbh);
       const cfg = TOWER_WEAPON[TOWER_FOR_TURRET[def.id] ?? ''];
       if (cfg && tw.weapon) {
@@ -1949,7 +1950,7 @@ export class BattleSimulationEngine {
     // Üs can barı
     const barW = 128;
     const barH = 10;
-    const barY = -H - 16 - 3 * 46 - 58;
+    const barY = -H - 16 - 3 * TURRET_SLOT_SPACING - 70;
     ctx.fillStyle = 'rgba(9, 13, 22, 0.88)';
     ctx.fillRect(-barW / 2 - 2, barY - 2, barW + 4, barH + 4);
     const trailPct = Math.max(0, Math.min(1, team.trailingHp / team.maxHp));
@@ -1965,8 +1966,8 @@ export class BattleSimulationEngine {
   /** Birimin ekranda çizileceği yükseklik (hitbox'tan biraz büyük, sprite oranı korunur). */
   private rigDisplayHeight(u: ActiveUnit, rig: Rig): number {
     const aspect = rig.bounds.w / rig.bounds.h;
-    let H = u.height * 1.5;
-    if (H * aspect > u.width * 2.1) H = (u.width * 2.1) / aspect;
+    let H = u.height * 2.5;
+    if (H * aspect > u.width * 4.0) H = (u.width * 4.0) / aspect;
     return H;
   }
 

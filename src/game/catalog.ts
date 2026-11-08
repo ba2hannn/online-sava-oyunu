@@ -6,10 +6,11 @@ export const TEAM1_BASE_X = 155;
 export const TEAM2_BASE_X = WORLD_WIDTH - 155;
 
 /** Üs sprite'ının oyun içi çizim ölçüleri (çağa göre). Kule slotları bu yüksekliğin üstüne dizilir. */
-export const BASE_VISUAL_WIDTH = 170;
-export const BASE_VISUAL_HEIGHT = [93, 107, 53, 78, 79];
+export const BASE_VISUAL_WIDTH = 200;
+export const BASE_VISUAL_HEIGHT = [109, 126, 62, 92, 93];
+export const TURRET_SLOT_SPACING = 80;
 export function turretSlotOffsetY(era: number, slot: number): number {
-  return -(BASE_VISUAL_HEIGHT[era] ?? 90) - 16 - slot * 46;
+  return -(BASE_VISUAL_HEIGHT[era] ?? 90) - 16 - slot * TURRET_SLOT_SPACING;
 }
 export const TEAM1_SPAWN_X = 250;
 export const TEAM2_SPAWN_X = WORLD_WIDTH - 250;
