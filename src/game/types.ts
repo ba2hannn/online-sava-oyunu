@@ -236,6 +236,12 @@ export interface BattleActionCommand {
   defId?: string;
   doctrineKey?: 'economy' | 'warfare' | 'fortress';
   emoteText?: string;
+  /**
+   * Online only: per-sender monotonically increasing sequence number. The authoritative
+   * host echoes the highest processed value back in `WorldSyncSnapshot.ackedCmdSeq` so the
+   * replica knows which of its predicted commands are already reflected in a snapshot.
+   */
+  seq?: number;
 }
 
 export interface WorldSyncSnapshot {
@@ -245,4 +251,10 @@ export interface WorldSyncSnapshot {
   team2: TeamState;
   units: ActiveUnit[];
   activeBanner: { text: string; color: string; timer: number } | null;
+  /** Random id of the host's match instance; changes when the host starts a new match. */
+  epoch?: string;
+  /** Monotonic snapshot counter within `epoch`; replicas drop stale/duplicate snapshots. */
+  seq?: number;
+  /** Highest command `seq` the host has processed from each team. */
+  ackedCmdSeq?: { 1: number; 2: number };
 }

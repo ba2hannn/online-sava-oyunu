@@ -62,6 +62,9 @@ const PROJECTILE_SPRITES: Record<string, { name: string; len: number; heading?: 
   airstrike: { name: 'rocket', len: 50 },
   orbital: { name: 'laser', len: 90 },
 };
+
+/** ~3 s at the host's 10 Hz snapshot rate before an unacknowledged prediction is abandoned. */
+const PENDING_COMMAND_MAX_SNAPSHOTS = 30;
 const PROJECTILE_POOL_SIZE = 256;
 const FLOATING_TEXT_POOL_SIZE = 64;
 
@@ -116,6 +119,19 @@ export class BattleSimulationEngine {
   private onStateBroadcast?: (snapshot: WorldSyncSnapshot) => void;
   private hudSyncAccumulator = 0;
   private netSyncAccumulator = 0;
+
+  // ---- Online synchronisation state ----
+  // Team 1 is the authoritative host: it alone spawns units, decides deaths and the winner,
+  // and broadcasts WorldSyncSnapshots. Team 2 is a replica: it predicts between snapshots
+  // but never creates units of its own (that used to produce uid collisions and units that
+  // existed only on one screen).
+  private matchEpoch = '';
+  private snapshotSeq = 0;
+  private lastAppliedEpoch = '';
+  private lastAppliedSeq = -1;
+  private nextLocalCmdSeq = 1;
+  private ackedCmdSeq: { 1: number; 2: number } = { 1: 0, 2: 0 };
+  private pendingLocalCommands: Array<{ cmd: BattleActionCommand; snapshotsSeen: number }> = [];
 
   // Ambient star/dust seeds
   private stars: Array<{ x: number; y: number; r: number; a: number }> = [];
@@ -261,6 +277,14 @@ export class BattleSimulationEngine {
     this.cameraTrauma = 0;
     this.outcomeDelayTimer = 0;
     this.pendingWinner = null;
+    this.netSyncAccumulator = 0;
+    this.matchEpoch = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    this.snapshotSeq = 0;
+    this.lastAppliedEpoch = '';
+    this.lastAppliedSeq = -1;
+    this.nextLocalCmdSeq = 1;
+    this.ackedCmdSeq = { 1: 0, 2: 0 };
+    this.pendingLocalCommands = [];
     this.activeBanner = {
       text: `${ERAS[0].name.toUpperCase()} BAŞLADI`,
       color: ERAS[0].accentColor,
@@ -440,6 +464,64 @@ export class BattleSimulationEngine {
       this.emitHudSnapshot();
     }
     return ok;
+  }
+
+  /** Online authoritative host (team 1). */
+  public isNetAuthority(): boolean {
+    return this.mode === 'online' && this.playerTeam === 1;
+  }
+
+  /** Online replica (team 2): predicts locally, but host snapshots are the truth. */
+  public isNetReplica(): boolean {
+    return this.mode === 'online' && this.playerTeam === 2;
+  }
+
+  /**
+   * Executes a command issued by the local player. Returns the command to transmit to the
+   * peer (stamped with a sequence number in online mode) or null when it was rejected.
+   * In online mode a player can only command their own team.
+   */
+  public issueLocalCommand(cmd: BattleActionCommand): BattleActionCommand | null {
+    if (this.mode !== 'online') {
+      return this.executeCommand(cmd) ? cmd : null;
+    }
+    if (cmd.team !== this.playerTeam) return null;
+    const stamped: BattleActionCommand = { ...cmd, seq: this.nextLocalCmdSeq++ };
+    if (!this.executeCommand(stamped)) return null;
+    if (this.isNetReplica() && stamped.type !== 'EMOTE') {
+      this.pendingLocalCommands.push({ cmd: stamped, snapshotsSeen: 0 });
+    }
+    return stamped;
+  }
+
+  /**
+   * Executes a command received from the peer. The peer may only drive the opposing team.
+   * On the host, the command's sequence number is acknowledged in the next snapshots even if
+   * the command was rejected, so the replica stops predicting it.
+   */
+  public applyRemoteCommand(cmd: BattleActionCommand): boolean {
+    if (!cmd || (cmd.team !== 1 && cmd.team !== 2)) return false;
+    if (this.mode === 'online' && cmd.team === this.playerTeam) return false;
+    const ok = this.executeCommand(cmd);
+    if (this.isNetAuthority() && typeof cmd.seq === 'number' && Number.isFinite(cmd.seq)) {
+      this.ackedCmdSeq[cmd.team] = Math.max(this.ackedCmdSeq[cmd.team], cmd.seq);
+    }
+    return ok;
+  }
+
+  /**
+   * The server announced the match result (host finished, or a player abandoned).
+   * Ends the match through the normal outcome path so the summary modal appears.
+   */
+  public concludeFromAuthority(winner: TeamId): void {
+    if (this.lifecycle === 'gameover' || this.lifecycle === 'title') return;
+    if (this.lifecycle === 'paused') this.lifecycle = 'playing';
+    if (this.pendingWinner === null) this.beginOutcome(winner);
+  }
+
+  /** Number of locally predicted commands not yet confirmed by a host snapshot (tests/debug). */
+  public getPendingCommandCount(): number {
+    return this.pendingLocalCommands.length;
   }
 
   private triggerSpecialPower(teamState: TeamState): void {
@@ -661,15 +743,14 @@ export class BattleSimulationEngine {
     this.stepProjectiles(simDt);
     this.stepParticlesAndTexts(simDt);
 
-    if (this.lifecycle === 'playing' && this.pendingWinner === null) {
+    // The replica never decides the winner from its own (predicted) base damage; it waits for
+    // a host snapshot with a destroyed fortress (see applyWorldSnapshot) or MATCH_OVER.
+    if (this.lifecycle === 'playing' && this.pendingWinner === null && !this.isNetReplica()) {
       const win = checkWinCondition(this.team1, this.team2);
       if (win !== null) {
-        this.pendingWinner = win;
-        this.outcomeDelayTimer = 0.48;
-        const defeatedBaseX = win === 1 ? TEAM2_BASE_X : TEAM1_BASE_X;
-        this.spawnBurst(defeatedBaseX, GROUND_Y - 80, 42, '#f97316', 320, 8);
-        this.cameraTrauma = 1.0;
-        this.hitstopTimer = 0.07;
+        this.beginOutcome(win);
+        // Make sure the final, decisive state reaches the replica right away.
+        this.netSyncAccumulator = Number.POSITIVE_INFINITY;
       }
     }
 
@@ -687,6 +768,15 @@ export class BattleSimulationEngine {
         this.onStateBroadcast?.(this.exportWorldSnapshot());
       }
     }
+  }
+
+  private beginOutcome(win: TeamId): void {
+    this.pendingWinner = win;
+    this.outcomeDelayTimer = 0.48;
+    const defeatedBaseX = win === 1 ? TEAM2_BASE_X : TEAM1_BASE_X;
+    this.spawnBurst(defeatedBaseX, GROUND_Y - 80, 42, '#f97316', 320, 8);
+    this.cameraTrauma = 1.0;
+    this.hitstopTimer = 0.07;
   }
 
   private stepTeamState(team: TeamState, dt: number): void {
@@ -747,7 +837,10 @@ export class BattleSimulationEngine {
       );
       const head = team.queue[0];
       head.remainingTime = Math.max(0, head.remainingTime - dt);
-      if (head.remainingTime <= 0 && !blockingAlly) {
+      // Only the authority materialises queued units. A replica spawning locally would mint
+      // uids from its own counter (colliding with host uids) and show units the host never
+      // created; they then vanished on the next snapshot. The host's snapshot delivers them.
+      if (head.remainingTime <= 0 && !blockingAlly && !this.isNetReplica()) {
         team.queue.shift();
         const spawned = createActiveUnit(this.nextUnitUid++, team, head.unitDefId);
         if (spawned) {
@@ -861,7 +954,14 @@ export class BattleSimulationEngine {
         u.koVy += 520 * dt;
         u.koAngle += (u.team === 1 ? -5.5 : 5.5) * dt;
         if (u.koTimer <= 0) {
-          this.units.splice(i, 1);
+          if (this.isNetReplica()) {
+            // A predicted death is only removed once the host's snapshot drops the unit;
+            // if the host still has it alive, the next snapshot revives it instead of the
+            // unit silently disappearing from this screen.
+            u.koTimer = 0;
+          } else {
+            this.units.splice(i, 1);
+          }
         }
         continue;
       }
@@ -1454,13 +1554,53 @@ export class BattleSimulationEngine {
       },
       units: this.units.map((u) => ({ ...u })),
       activeBanner: this.activeBanner ? { ...this.activeBanner } : null,
+      epoch: this.matchEpoch,
+      seq: ++this.snapshotSeq,
+      ackedCmdSeq: { 1: this.ackedCmdSeq[1], 2: this.ackedCmdSeq[2] },
     };
   }
 
-  public applyWorldSnapshot(snap: WorldSyncSnapshot): void {
-    if (!snap || typeof snap.elapsedTime !== 'number') return;
+  /**
+   * Applies an authoritative snapshot. Returns false when the snapshot was ignored
+   * (malformed, or older than / identical to one already applied).
+   * The replica uses this every tick; the host only uses it to resume after a page reload.
+   */
+  public applyWorldSnapshot(snap: WorldSyncSnapshot): boolean {
+    if (
+      !snap ||
+      typeof snap.elapsedTime !== 'number' ||
+      !snap.team1 ||
+      !snap.team2 ||
+      !Array.isArray(snap.units)
+    ) {
+      return false;
+    }
+
+    // Drop stale or duplicated snapshots (out-of-order delivery, a replayed ROOM_SYNC
+    // lastSnapshot that is older than what we already have, ...).
+    if (typeof snap.epoch === 'string' && typeof snap.seq === 'number') {
+      if (snap.epoch === this.lastAppliedEpoch && snap.seq <= this.lastAppliedSeq) {
+        return false;
+      }
+      this.lastAppliedEpoch = snap.epoch;
+      this.lastAppliedSeq = snap.seq;
+      if (this.isNetAuthority()) {
+        // Resuming as host: continue the same snapshot stream so the guest accepts it.
+        this.matchEpoch = snap.epoch;
+        this.snapshotSeq = Math.max(this.snapshotSeq, snap.seq);
+      }
+    }
+    if (snap.ackedCmdSeq && this.isNetAuthority()) {
+      this.ackedCmdSeq = {
+        1: Math.max(this.ackedCmdSeq[1], snap.ackedCmdSeq[1] || 0),
+        2: Math.max(this.ackedCmdSeq[2], snap.ackedCmdSeq[2] || 0),
+      };
+    }
+
     this.elapsedTime = snap.elapsedTime;
-    this.nextUnitUid = Math.max(this.nextUnitUid, snap.nextUnitUid || 1);
+    this.nextUnitUid = this.isNetReplica()
+      ? snap.nextUnitUid || 1
+      : Math.max(this.nextUnitUid, snap.nextUnitUid || 1);
 
     // Preserve smooth trailingHp while syncing authoritative team stats
     const t1Trailing = this.team1.trailingHp;
@@ -1497,6 +1637,27 @@ export class BattleSimulationEngine {
           blendedX = prev.x + diff * 0.6;
         }
 
+        // A uid can only ever refer to one unit (the host is the sole uid issuer), but guard
+        // anyway: never blend presentation state across different units.
+        if (prev.team !== incoming.team || prev.defId !== incoming.defId) {
+          return { ...incoming };
+        }
+        // Keep the local death animation running instead of restarting it every snapshot.
+        if (incoming.state === 'ko' && prev.state === 'ko') {
+          return {
+            ...incoming,
+            x: prev.x,
+            y: prev.y,
+            koTimer: Math.min(prev.koTimer, incoming.koTimer),
+            koAngle: prev.koAngle,
+            koVy: prev.koVy,
+            walkDistance: prev.walkDistance,
+            scaleX: prev.scaleX,
+            scaleY: prev.scaleY,
+            trailingHp: prev.trailingHp,
+          };
+        }
+
         return {
           ...incoming,
           x: blendedX,
@@ -1507,13 +1668,57 @@ export class BattleSimulationEngine {
           hitFlashTimer: Math.max(prev.hitFlashTimer, incoming.hitFlashTimer),
         };
       }
+      // Newly spawned on the host: give the replica the same spawn feedback the host shows.
+      if (this.isNetReplica() && incoming.state !== 'ko' && this.lifecycle === 'playing') {
+        this.spawnBurst(incoming.x, GROUND_Y - 24, 6, incoming.accentColor, 95, 3);
+        soundEngine.playSpawn();
+      }
       return { ...incoming };
     });
 
     if (snap.activeBanner) {
       this.activeBanner = { ...snap.activeBanner };
     }
+
+    if (this.isNetReplica()) {
+      this.replayPendingLocalCommands(snap.ackedCmdSeq?.[this.playerTeam] ?? 0);
+
+      // The host's snapshot is the only source of truth for the outcome on the replica.
+      if (this.lifecycle === 'playing' && this.pendingWinner === null) {
+        const win = checkWinCondition(this.team1, this.team2);
+        if (win !== null) this.beginOutcome(win);
+      }
+    }
     this.emitHudSnapshot();
+    return true;
+  }
+
+  /**
+   * Re-applies (without side effects) the replica's own commands that the host has not
+   * processed yet, so a snapshot generated before the host received them does not make the
+   * player's queue/gold/turret flicker back. Commands the host never acknowledges (lost
+   * while disconnected, rejected, ...) are dropped after a bounded number of snapshots.
+   */
+  private replayPendingLocalCommands(ackedSeq: number): void {
+    const myTeam = this.playerTeam === 1 ? this.team1 : this.team2;
+    const stillPending: Array<{ cmd: BattleActionCommand; snapshotsSeen: number }> = [];
+    for (const entry of this.pendingLocalCommands) {
+      if ((entry.cmd.seq ?? 0) <= ackedSeq) continue;
+      entry.snapshotsSeen += 1;
+      if (entry.snapshotsSeen > PENDING_COMMAND_MAX_SNAPSHOTS) continue;
+      let reapplied: boolean;
+      if (entry.cmd.type === 'CAST_SPECIAL') {
+        reapplied = myTeam.specialCooldown <= 0;
+        if (reapplied) {
+          const warfareCdMult = Math.max(0.7, 1 - myTeam.doctrines.warfareLevel * 0.06);
+          myTeam.specialCooldown = Math.round(myTeam.specialMaxCooldown * warfareCdMult);
+        }
+      } else {
+        reapplied = applyBattleCommand(myTeam, entry.cmd);
+      }
+      if (reapplied) stillPending.push(entry);
+    }
+    this.pendingLocalCommands = stillPending;
   }
 
   public render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
