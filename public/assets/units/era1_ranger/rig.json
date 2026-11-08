@@ -1,0 +1,194 @@
+{
+ "id": "era1_ranger",
+ "label": "Uzun Yaycı",
+ "loco": "biped",
+ "attack": "bow",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 154,
+   "h": 267
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.82
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 88,
+   "h": 215
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.82
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 75,
+   "h": 223
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.56,
+    0.45
+   ],
+   "piv": [
+    0.1,
+    0.5
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 178,
+   "h": 49
+  },
+  {
+   "name": "bow",
+   "parent": "armF",
+   "att": [
+    0.95,
+    0.45
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "bow",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.75,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "bow.png"
+   ],
+   "w": 61,
+   "h": 430
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.52,
+    0.45
+   ],
+   "piv": [
+    0.1,
+    0.35
+   ],
+   "z": 3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 139,
+   "h": 89
+  },
+  {
+   "name": "arrow",
+   "parent": "armB",
+   "att": [
+    0.95,
+    0.6
+   ],
+   "piv": [
+    0.5,
+    0.75
+   ],
+   "z": 1,
+   "role": "arrow",
+   "rest": 90,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "arrow.png"
+   ],
+   "w": 29,
+   "h": 193
+  }
+ ]
+}

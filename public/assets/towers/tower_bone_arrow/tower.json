@@ -1,0 +1,24 @@
+{
+ "id": "tower_bone_arrow",
+ "label": "Kemik Ok Kulesi",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 98,
+   "h": 145
+  },
+  {
+   "name": "weapon",
+   "file": "weapon.png",
+   "w": 86,
+   "h": 115
+  },
+  {
+   "name": "proj",
+   "file": "proj.png",
+   "w": 85,
+   "h": 23
+  }
+ ]
+}

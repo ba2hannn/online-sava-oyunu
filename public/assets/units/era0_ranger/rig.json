@@ -1,0 +1,191 @@
+{
+ "id": "era0_ranger",
+ "label": "Sapancı İzci",
+ "loco": "biped",
+ "attack": "sling",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 184,
+   "h": 355
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.8
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 74,
+   "h": 218
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.38,
+    0.42
+   ],
+   "piv": [
+    0.43,
+    0.12
+   ],
+   "z": -3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 83,
+   "h": 195
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.8
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 107,
+   "h": 218
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.42
+   ],
+   "piv": [
+    0.14,
+    0.35
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": -12,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 152,
+   "h": 102
+  },
+  {
+   "name": "sling",
+   "parent": "armF",
+   "att": [
+    0.86,
+    0.4
+   ],
+   "piv": [
+    0.5,
+    0.04
+   ],
+   "z": 1,
+   "role": "sling",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "sling.png"
+   ],
+   "w": 56,
+   "h": 208
+  },
+  {
+   "name": "stone",
+   "parent": "sling",
+   "att": [
+    0.5,
+    0.78
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 2,
+   "role": "stone",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "stone.png"
+   ],
+   "w": 45,
+   "h": 44
+  }
+ ]
+}

@@ -1,0 +1,168 @@
+{
+ "id": "era0_swarmer",
+ "label": "Sopalı Avcı",
+ "loco": "biped",
+ "attack": "smash",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 174,
+   "h": 351
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.41,
+    0.85
+   ],
+   "piv": [
+    0.345,
+    0.11
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 104,
+   "h": 234
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.24,
+    0.46
+   ],
+   "piv": [
+    0.61,
+    0.13
+   ],
+   "z": -3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 79,
+   "h": 214
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.41,
+    0.85
+   ],
+   "piv": [
+    0.37,
+    0.115
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 124,
+   "h": 220
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.44,
+    0.46
+   ],
+   "piv": [
+    0.4,
+    0.175
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 139,
+   "h": 176
+  },
+  {
+   "name": "club",
+   "parent": "armF",
+   "att": [
+    0.77,
+    0.81
+   ],
+   "piv": [
+    0.53,
+    0.875
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": 35,
+   "tip": [
+    0.5,
+    0.04
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "club.png"
+   ],
+   "w": 109,
+   "h": 301
+  }
+ ]
+}

@@ -1,0 +1,168 @@
+{
+ "id": "era2_charger",
+ "label": "Kraliyet Dragoonu",
+ "loco": "mount",
+ "attack": "slash",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 337,
+   "h": 405
+  },
+  {
+   "name": "rear",
+   "parent": "body",
+   "att": [
+    0.04,
+    0.5
+   ],
+   "piv": [
+    0.85,
+    0.2
+   ],
+   "z": -1,
+   "role": "mlegF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rear.png"
+   ],
+   "w": 76,
+   "h": 237
+  },
+  {
+   "name": "tail",
+   "parent": "body",
+   "att": [
+    0.02,
+    0.35
+   ],
+   "piv": [
+    0.85,
+    0.15
+   ],
+   "z": -2,
+   "role": "tail",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "tail.png"
+   ],
+   "w": 93,
+   "h": 168
+  },
+  {
+   "name": "rider",
+   "parent": "body",
+   "att": [
+    0.52,
+    0.28
+   ],
+   "piv": [
+    0.5,
+    0.98
+   ],
+   "z": 1,
+   "role": "rider",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rider.png"
+   ],
+   "w": 129,
+   "h": 283
+  },
+  {
+   "name": "armR",
+   "parent": "rider",
+   "att": [
+    0.55,
+    0.55
+   ],
+   "piv": [
+    0.35,
+    0.1
+   ],
+   "z": 2,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armR.png"
+   ],
+   "w": 85,
+   "h": 123
+  },
+  {
+   "name": "saber",
+   "parent": "armR",
+   "att": [
+    0.45,
+    0.72
+   ],
+   "piv": [
+    0.5,
+    0.85
+   ],
+   "z": 3,
+   "role": "weapon",
+   "rest": 40,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "saber.png"
+   ],
+   "w": 49,
+   "h": 205
+  }
+ ]
+}

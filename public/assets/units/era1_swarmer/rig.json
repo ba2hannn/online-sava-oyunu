@@ -1,0 +1,194 @@
+{
+ "id": "era1_swarmer",
+ "label": "Kılıçlı Piyade",
+ "loco": "biped",
+ "attack": "slash",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 166,
+   "h": 348
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.85
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 88,
+   "h": 238
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.4,
+    0.45
+   ],
+   "piv": [
+    0.35,
+    0.12
+   ],
+   "z": -3,
+   "role": "armB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 77,
+   "h": 136
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.85
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 91,
+   "h": 247
+  },
+  {
+   "name": "shield",
+   "parent": "armB",
+   "att": [
+    0.75,
+    0.9
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "shield",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "shield.png"
+   ],
+   "w": 116,
+   "h": 144
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.56,
+    0.45
+   ],
+   "piv": [
+    0.2,
+    0.12
+   ],
+   "z": 3,
+   "role": "armF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 126,
+   "h": 116
+  },
+  {
+   "name": "sword",
+   "parent": "armF",
+   "att": [
+    0.88,
+    0.76
+   ],
+   "piv": [
+    0.5,
+    0.86
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": 40,
+   "tip": [
+    0.5,
+    0.0
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "sword.png"
+   ],
+   "w": 80,
+   "h": 309
+  }
+ ]
+}

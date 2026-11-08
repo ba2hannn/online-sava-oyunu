@@ -1,0 +1,24 @@
+{
+ "id": "tower_tesla",
+ "label": "Kuantum Tesla Bobini",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 72,
+   "h": 119
+  },
+  {
+   "name": "weapon",
+   "file": "weapon.png",
+   "w": 33,
+   "h": 38
+  },
+  {
+   "name": "proj",
+   "file": "proj.png",
+   "w": 95,
+   "h": 51
+  }
+ ]
+}

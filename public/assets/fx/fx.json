@@ -1,0 +1,134 @@
+[
+ {
+  "name": "stone",
+  "file": "stone.png",
+  "w": 70,
+  "h": 61
+ },
+ {
+  "name": "arrow_fire",
+  "file": "arrow_fire.png",
+  "w": 202,
+  "h": 61
+ },
+ {
+  "name": "bullet_a",
+  "file": "bullet_a.png",
+  "w": 44,
+  "h": 21
+ },
+ {
+  "name": "bullet_b",
+  "file": "bullet_b.png",
+  "w": 43,
+  "h": 22
+ },
+ {
+  "name": "cannonball",
+  "file": "cannonball.png",
+  "w": 71,
+  "h": 71
+ },
+ {
+  "name": "arrow",
+  "file": "arrow.png",
+  "w": 179,
+  "h": 31
+ },
+ {
+  "name": "bullet_c",
+  "file": "bullet_c.png",
+  "w": 42,
+  "h": 35
+ },
+ {
+  "name": "plasma_a",
+  "file": "plasma_a.png",
+  "w": 87,
+  "h": 87
+ },
+ {
+  "name": "rocket",
+  "file": "rocket.png",
+  "w": 226,
+  "h": 73
+ },
+ {
+  "name": "plasma_b",
+  "file": "plasma_b.png",
+  "w": 76,
+  "h": 77
+ },
+ {
+  "name": "laser",
+  "file": "laser.png",
+  "w": 213,
+  "h": 15
+ },
+ {
+  "name": "meteor",
+  "file": "meteor.png",
+  "w": 192,
+  "h": 122
+ },
+ {
+  "name": "explosion_a",
+  "file": "explosion_a.png",
+  "w": 179,
+  "h": 130
+ },
+ {
+  "name": "explosion_b",
+  "file": "explosion_b.png",
+  "w": 130,
+  "h": 95
+ },
+ {
+  "name": "explosion_c1",
+  "file": "explosion_c1.png",
+  "w": 24,
+  "h": 25
+ },
+ {
+  "name": "explosion_c2",
+  "file": "explosion_c2.png",
+  "w": 36,
+  "h": 62
+ },
+ {
+  "name": "explosion_c3",
+  "file": "explosion_c3.png",
+  "w": 21,
+  "h": 31
+ },
+ {
+  "name": "spark",
+  "file": "spark.png",
+  "w": 110,
+  "h": 109
+ },
+ {
+  "name": "smoke_purple",
+  "file": "smoke_purple.png",
+  "w": 113,
+  "h": 114
+ },
+ {
+  "name": "flame",
+  "file": "flame.png",
+  "w": 180,
+  "h": 88
+ },
+ {
+  "name": "dust",
+  "file": "dust.png",
+  "w": 203,
+  "h": 88
+ },
+ {
+  "name": "puff",
+  "file": "puff.png",
+  "w": 29,
+  "h": 27
+ }
+]

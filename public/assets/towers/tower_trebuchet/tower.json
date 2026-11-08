@@ -1,0 +1,12 @@
+{
+ "id": "tower_trebuchet",
+ "label": "Kuşatma Trebuchet",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 162,
+   "h": 153
+  }
+ ]
+}

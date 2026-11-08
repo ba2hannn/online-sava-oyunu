@@ -1,0 +1,217 @@
+{
+ "id": "era2_colossus",
+ "label": "Şahi Buharlı Topu",
+ "loco": "vehicle",
+ "attack": "cannon",
+ "params": {},
+ "nodes": [
+  {
+   "name": "wagon",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "wagon.png"
+   ],
+   "w": 412,
+   "h": 460
+  },
+  {
+   "name": "wheelA",
+   "parent": "wagon",
+   "att": [
+    0.26,
+    0.8
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "wheel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "wheelA.png"
+   ],
+   "w": 174,
+   "h": 176
+  },
+  {
+   "name": "wheelB",
+   "parent": "wagon",
+   "att": [
+    0.68,
+    0.81
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "wheel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "wheelB.png"
+   ],
+   "w": 174,
+   "h": 176
+  },
+  {
+   "name": "gunner",
+   "parent": "wagon",
+   "att": [
+    1.03,
+    0.97
+   ],
+   "piv": [
+    0.5,
+    1.0
+   ],
+   "z": 1,
+   "role": "gunner",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "gunner.png"
+   ],
+   "w": 108,
+   "h": 223
+  },
+  {
+   "name": "barrel",
+   "parent": "wagon",
+   "att": [
+    0.78,
+    0.45
+   ],
+   "piv": [
+    0.2,
+    0.5
+   ],
+   "z": 2,
+   "role": "barrel",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "barrel.png"
+   ],
+   "w": 320,
+   "h": 101
+  },
+  {
+   "name": "steam",
+   "parent": "wagon",
+   "att": [
+    0.36,
+    0.0
+   ],
+   "piv": [
+    0.5,
+    1.0
+   ],
+   "z": -1,
+   "role": "steam",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.6,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "steam.png"
+   ],
+   "w": 129,
+   "h": 169
+  },
+  {
+   "name": "smoke",
+   "parent": "barrel",
+   "att": [
+    0.99,
+    0.5
+   ],
+   "piv": [
+    0.1,
+    0.9
+   ],
+   "z": 3,
+   "role": "puff",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.7,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "smoke.png"
+   ],
+   "w": 129,
+   "h": 169
+  },
+  {
+   "name": "ball",
+   "parent": "barrel",
+   "att": [
+    0.99,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "proj",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.9,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "ball.png"
+   ],
+   "w": 69,
+   "h": 69
+  }
+ ]
+}

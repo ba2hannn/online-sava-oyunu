@@ -1,0 +1,217 @@
+{
+ "id": "era3_ranger",
+ "label": "Güdümlü RPG Uzmanı",
+ "loco": "biped",
+ "attack": "rpg",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 198,
+   "h": 261
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.9
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 103,
+   "h": 207
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.9
+   ],
+   "piv": [
+    0.5,
+    0.1
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 103,
+   "h": 222
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.42
+   ],
+   "piv": [
+    0.2,
+    0.15
+   ],
+   "z": 3,
+   "role": "armB",
+   "rest": -35,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 133,
+   "h": 140
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.58,
+    0.42
+   ],
+   "piv": [
+    0.15,
+    0.15
+   ],
+   "z": 4,
+   "role": "armF",
+   "rest": -25,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 136,
+   "h": 139
+  },
+  {
+   "name": "launcher",
+   "parent": "armF",
+   "att": [
+    0.92,
+    0.65
+   ],
+   "piv": [
+    0.57,
+    0.8
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": -8,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "launcher.png"
+   ],
+   "w": 321,
+   "h": 130
+  },
+  {
+   "name": "rocket",
+   "parent": "launcher",
+   "att": [
+    1.0,
+    0.45
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 2,
+   "role": "proj",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.5,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rocket.png"
+   ],
+   "w": 318,
+   "h": 59
+  },
+  {
+   "name": "blast",
+   "parent": "launcher",
+   "att": [
+    0.0,
+    0.5
+   ],
+   "piv": [
+    1.0,
+    0.5
+   ],
+   "z": 2,
+   "role": "puff",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.4,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "blast.png"
+   ],
+   "w": 149,
+   "h": 167
+  }
+ ]
+}

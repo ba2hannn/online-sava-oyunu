@@ -1,0 +1,18 @@
+{
+ "id": "tower_mortar",
+ "label": "İmparatorluk Havan Topu",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 133,
+   "h": 114
+  },
+  {
+   "name": "proj",
+   "file": "proj.png",
+   "w": 33,
+   "h": 54
+  }
+ ]
+}

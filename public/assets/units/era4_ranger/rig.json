@@ -1,0 +1,217 @@
+{
+ "id": "era4_ranger",
+ "label": "Kuantum Railgun Nişancısı",
+ "loco": "biped",
+ "attack": "shoot",
+ "params": {},
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 162,
+   "h": 329
+  },
+  {
+   "name": "legB",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.9
+   ],
+   "piv": [
+    0.5,
+    0.12
+   ],
+   "z": -2,
+   "role": "legB",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legB.png"
+   ],
+   "w": 89,
+   "h": 255
+  },
+  {
+   "name": "armB",
+   "parent": "body",
+   "att": [
+    0.5,
+    0.42
+   ],
+   "piv": [
+    0.35,
+    0.1
+   ],
+   "z": 3,
+   "role": "armB",
+   "rest": -30,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armB.png"
+   ],
+   "w": 97,
+   "h": 222
+  },
+  {
+   "name": "legF",
+   "parent": "body",
+   "att": [
+    0.55,
+    0.9
+   ],
+   "piv": [
+    0.5,
+    0.12
+   ],
+   "z": 2,
+   "role": "legF",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "legF.png"
+   ],
+   "w": 118,
+   "h": 274
+  },
+  {
+   "name": "armF",
+   "parent": "body",
+   "att": [
+    0.58,
+    0.42
+   ],
+   "piv": [
+    0.05,
+    0.15
+   ],
+   "z": 4,
+   "role": "armF",
+   "rest": -25,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "armF.png"
+   ],
+   "w": 139,
+   "h": 172
+  },
+  {
+   "name": "rifle",
+   "parent": "armF",
+   "att": [
+    0.95,
+    0.78
+   ],
+   "piv": [
+    0.3,
+    0.62
+   ],
+   "z": 1,
+   "role": "weapon",
+   "rest": -8,
+   "tip": null,
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "rifle.png"
+   ],
+   "w": 412,
+   "h": 115
+  },
+  {
+   "name": "beam",
+   "parent": "rifle",
+   "att": [
+    1.0,
+    0.35
+   ],
+   "piv": [
+    0.0,
+    0.5
+   ],
+   "z": 3,
+   "role": "proj",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.8,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "beam.png"
+   ],
+   "w": 292,
+   "h": 18
+  },
+  {
+   "name": "orb",
+   "parent": "rifle",
+   "att": [
+    1.0,
+    0.35
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 3,
+   "role": "flash",
+   "rest": 0,
+   "tip": null,
+   "nb": true,
+   "scale": 0.6,
+   "vis": false,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "orb.png"
+   ],
+   "w": 98,
+   "h": 98
+  }
+ ]
+}

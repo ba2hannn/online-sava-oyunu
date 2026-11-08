@@ -1,0 +1,92 @@
+{
+ "id": "era0_colossus",
+ "label": "Mamut & Kaya Devi",
+ "loco": "sway",
+ "attack": "smashUp",
+ "params": {
+  "weaponIsArm": true
+ },
+ "nodes": [
+  {
+   "name": "body",
+   "parent": null,
+   "att": [
+    0.5,
+    0.5
+   ],
+   "piv": [
+    0.5,
+    0.5
+   ],
+   "z": 1,
+   "role": "body",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "body.png"
+   ],
+   "w": 461,
+   "h": 318
+  },
+  {
+   "name": "giant",
+   "parent": "body",
+   "att": [
+    0.46,
+    0.1
+   ],
+   "piv": [
+    0.5,
+    0.93
+   ],
+   "z": 1,
+   "role": "rider",
+   "rest": 0,
+   "tip": null,
+   "nb": false,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": false,
+   "files": [
+    "giant.png"
+   ],
+   "w": 176,
+   "h": 225
+  },
+  {
+   "name": "giantArm",
+   "parent": "giant",
+   "att": [
+    0.78,
+    0.45
+   ],
+   "piv": [
+    0.1,
+    0.3
+   ],
+   "z": 2,
+   "role": "armF",
+   "rest": 0,
+   "tip": [
+    0.78,
+    0.06
+   ],
+   "nb": true,
+   "scale": 1.0,
+   "vis": true,
+   "tint": null,
+   "trail": true,
+   "files": [
+    "giantArm.png"
+   ],
+   "w": 237,
+   "h": 237
+  }
+ ]
+}

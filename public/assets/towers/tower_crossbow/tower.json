@@ -1,0 +1,24 @@
+{
+ "id": "tower_crossbow",
+ "label": "Kraliyet Arbalet Kulesi",
+ "nodes": [
+  {
+   "name": "base",
+   "file": "base.png",
+   "w": 90,
+   "h": 150
+  },
+  {
+   "name": "weapon",
+   "file": "weapon.png",
+   "w": 99,
+   "h": 47
+  },
+  {
+   "name": "proj",
+   "file": "proj.png",
+   "w": 82,
+   "h": 20
+  }
+ ]
+}
