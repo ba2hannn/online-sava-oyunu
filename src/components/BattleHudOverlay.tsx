@@ -16,6 +16,7 @@ interface BattleHudOverlayProps {
   hud: HUDStateSnapshot;
   mode: GameMode;
   roomCode: string | null;
+  networkLabel?: string;
   muted: boolean;
   onCommand: (cmd: BattleActionCommand) => void;
   onToggleMute: () => void;
@@ -23,12 +24,14 @@ interface BattleHudOverlayProps {
   onRestart: () => void;
   onPanCamera: (dir: number) => void;
   onJumpCamera?: (ratio: number) => void;
+  onManualSync?: () => void;
 }
 
 export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
   hud,
   mode,
   roomCode,
+  networkLabel,
   muted,
   onCommand,
   onToggleMute,
@@ -36,6 +39,7 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
   onRestart,
   onPanCamera,
   onJumpCamera,
+  onManualSync,
 }) => {
   const [activeDrawer, setActiveDrawer] = useState<'none' | 'turrets' | 'doctrines' | 'emotes'>(
     'none'
@@ -167,18 +171,44 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
         </div>
 
         {/* Top-Center: Live Lane Radar & Battle Clock */}
-        <div className="hidden lg:flex flex-col items-center gap-1.5 pointer-events-auto bg-[#0c1018]/94 border border-slate-700/80 rounded-lg px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.85)] min-w-[320px]">
-          <div className="w-full flex items-center justify-between text-xs text-slate-300 font-mono-num">
+        <div className="hidden lg:flex flex-col items-center gap-1.5 pointer-events-auto bg-[#0c1018]/94 border border-slate-700/80 rounded-lg px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.85)] min-w-[360px]">
+          <div className="w-full flex items-center justify-between gap-3 text-xs text-slate-300 font-mono-num">
             <span>SÜRE: {formatTime(hud.elapsedTime)}</span>
-            <span>
-              {mode === 'online'
-                ? roomCode
-                  ? `ONLINE ODA #${roomCode}`
-                  : 'ONLINE SAVAŞ'
-                : mode === 'local2p'
-                ? '2 KİŞİLİK DÜELLO'
-                : 'KOMUTAN SEFERİ'}
+            <span
+              title="Rakip kaleye ne kadar yakın düşman öldürürseniz o kadar yüksek yüzdeli altın kazanırsınız (%45 - %225)"
+              className={`font-bold ${
+                hud.frontlineBonusPct >= 135
+                  ? 'text-emerald-400'
+                  : hud.frontlineBonusPct <= 70
+                  ? 'text-amber-300'
+                  : 'text-sky-300'
+              }`}
+            >
+              Taarruz Ganimeti: %{hud.frontlineBonusPct}
             </span>
+            {mode === 'online' ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-emerald-300">
+                  {roomCode ? `ODA #${roomCode}` : 'ONLINE'}
+                </span>
+                {onManualSync && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    title={networkLabel || 'Bağlantıyı ve oyun durumunu anında senkronize et'}
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      onManualSync();
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-sky-900/80 hover:bg-sky-600 text-[10px] font-bold text-sky-100 border border-sky-500/60 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Senkronize Et
+                  </button>
+                )}
+              </div>
+            ) : (
+              <span>{mode === 'local2p' ? '2 KİŞİLİK DÜELLO' : 'KOMUTAN SEFERİ'}</span>
+            )}
           </div>
 
           {/* Interactive Battlefield Minimap Strip */}
@@ -534,20 +564,20 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 [
                   {
                     key: 'economy',
-                    title: 'Savaş Ganimeti & Yağma',
-                    desc: 'Öldürülen her düşmandan kazanılan Altın ve XP ödülünü +%22 artırır.',
+                    title: 'Savaş Ganimeti & Lojistik',
+                    desc: 'Öldürülen düşmandan kazanılan Altın/XP ödülünü ve direniş ikmalini +%22 artırır.',
                     level: myTeam.doctrines.economyLevel,
                   },
                   {
                     key: 'warfare',
-                    title: 'Çelik & Barut Doktrini',
-                    desc: 'Tüm birimlerin hasarını +%12 ve hızını artırır.',
+                    title: 'Çelik & Taktik Doktrini',
+                    desc: 'Tüm birim/kule hasarını +%12 artırır ve Özel Güç süresini -%6 kısaltır.',
                     level: myTeam.doctrines.warfareLevel,
                   },
                   {
                     key: 'fortress',
-                    title: 'Sur Tahkimatı & Zırh',
-                    desc: 'Birim canını +%10 artırır ve kaleyi sürekli onarır.',
+                    title: 'Sur Tahkimatı & Savunma',
+                    desc: 'Birim canını +%10, kule menzil/hızını artırır, kale hasarını azaltır ve onarır.',
                     level: myTeam.doctrines.fortressLevel,
                   },
                 ] as const

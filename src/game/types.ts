@@ -237,3 +237,12 @@ export interface BattleActionCommand {
   doctrineKey?: 'economy' | 'warfare' | 'fortress';
   emoteText?: string;
 }
+
+export interface WorldSyncSnapshot {
+  elapsedTime: number;
+  nextUnitUid: number;
+  team1: TeamState;
+  team2: TeamState;
+  units: ActiveUnit[];
+  activeBanner: { text: string; color: string; timer: number } | null;
+}

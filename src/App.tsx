@@ -41,6 +41,7 @@ export default function App() {
     playerTeam: 1,
     elapsedTime: 0,
     cameraX: 0,
+    frontlineBonusPct: 50,
     unitRadar: [],
     activeBanner: null,
   }));
@@ -112,16 +113,25 @@ export default function App() {
         setRoomStatus('waiting');
         setOnlineError(null);
       },
-      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode }) => {
+      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode, resumeSnapshot }) => {
         setRoomCode(startedCode);
         setRoomStatus('playing');
         setOnlineError(null);
         modeRef.current = 'online';
         setMode('online');
         startNewGame('online', myTeam, team1Name, team2Name);
+        if (resumeSnapshot) {
+          engineRef.current?.applyWorldSnapshot(resumeSnapshot);
+        }
       },
       onRemoteCommand: (cmd) => {
         dispatchCommand(cmd, true);
+      },
+      onStateSnapshot: (snap) => {
+        engineRef.current?.applyWorldSnapshot(snap);
+      },
+      getWorldSnapshot: () => {
+        return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
       },
       onError: (msg) => {
         setOnlineError(msg);
@@ -158,16 +168,25 @@ export default function App() {
         setRoomStatus('waiting');
         setOnlineError(null);
       },
-      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode }) => {
+      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode, resumeSnapshot }) => {
         setRoomCode(startedCode);
         setRoomStatus('playing');
         setOnlineError(null);
         modeRef.current = 'online';
         setMode('online');
         startNewGame('online', myTeam, team1Name, team2Name);
+        if (resumeSnapshot) {
+          engineRef.current?.applyWorldSnapshot(resumeSnapshot);
+        }
       },
       onRemoteCommand: (cmd) => {
         dispatchCommand(cmd, true);
+      },
+      onStateSnapshot: (snap) => {
+        engineRef.current?.applyWorldSnapshot(snap);
+      },
+      getWorldSnapshot: () => {
+        return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
       },
       onError: (msg) => {
         setOnlineError(msg);
@@ -182,6 +201,9 @@ export default function App() {
       (runSummary) => {
         setSummary(runSummary);
         syncBodyDataset('gameover');
+      },
+      (worldSnap) => {
+        netRef.current?.sendStateSnapshot(worldSnap);
       }
     );
     engineRef.current = engine;
@@ -243,10 +265,26 @@ export default function App() {
 
     rafId = requestAnimationFrame(loop);
 
+    // Background-tab fallback timer so Online P2P simulation never freezes when a browser tab is hidden/minimized
+    const bgInterval = setInterval(() => {
+      if (
+        !isStopped &&
+        document.hidden &&
+        lifecycleRef.current === 'playing' &&
+        modeRef.current === 'online'
+      ) {
+        const now = performance.now();
+        const dt = Math.min(0.12, (now - lastTime) / 1000);
+        lastTime = now;
+        engine.step(dt, 0);
+      }
+    }, 100);
+
     return () => {
       isStopped = true;
       cancelAnimationFrame(rafId);
       if (timerId) clearTimeout(timerId);
+      clearInterval(bgInterval);
       resizeObserver.disconnect();
     };
   }, [syncBodyDataset]);
@@ -438,6 +476,7 @@ export default function App() {
           hud={hud}
           mode={mode}
           roomCode={roomCode}
+          networkLabel={networkLabel}
           muted={muted}
           onCommand={(cmd) => dispatchCommand(cmd, false)}
           onToggleMute={() => {
@@ -456,6 +495,9 @@ export default function App() {
           }}
           onJumpCamera={(ratio) => {
             engineRef.current?.setCameraNormalized(ratio);
+          }}
+          onManualSync={() => {
+            netRef.current?.requestManualSyncOrReconnect();
           }}
         />
       )}

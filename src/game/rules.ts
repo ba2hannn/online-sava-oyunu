@@ -6,7 +6,9 @@ import {
   TEAM1_SPAWN_X,
   TEAM2_BASE_X,
   TEAM2_SPAWN_X,
+  WORLD_WIDTH,
   getDoctrineCost,
+  getEraUnits,
   getTurretById,
   getUnitById,
 } from './catalog';
@@ -14,6 +16,7 @@ import {
   ActiveUnit,
   AIDifficulty,
   BattleActionCommand,
+  ProjectilePoolItem,
   TeamId,
   TeamState,
   UnitDefinition,
@@ -48,13 +51,255 @@ export function createInitialTeamState(team: TeamId, name?: string): TeamState {
 }
 
 export function calculatePassiveGoldPerSecond(_teamState: TeamState): number {
-  // Passive gold while standing still is disabled; gold is earned strictly by killing enemies!
+  // Base passive gold while hoarding gold is disabled; gold comes from kills, combat hits & anti-stall supply
   return 0;
+}
+
+export function getCheapestEraUnitCost(era: number): number {
+  const eraUnits = getEraUnits(era);
+  if (eraUnits.length === 0) return 35;
+  return Math.min(...eraUnits.map((u) => u.cost));
+}
+
+export function calculateAntiStallSupplyPerSecond(
+  teamState: TeamState,
+  activeAllyUnits: number,
+  activeEnemyUnits: number,
+  enemiesNearMyBase = 0,
+  enemyEra = 0,
+  enemyHpRatio = 1
+): number {
+  const cheapestCost = getCheapestEraUnitCost(teamState.era);
+  const totalAllyPresence = activeAllyUnits + teamState.queue.length;
+  const econMult = 1 + teamState.doctrines.economyLevel * 0.22;
+  const myHpRatio = teamState.hp / Math.max(1, teamState.maxHp);
+
+  // 1. Deadlock Prevention (Acil Seferberlik İkmali):
+  // If a commander has 0 units on field + 0 in queue (regardless of turrets!) and cannot comfortably afford units,
+  // rapidly supply gold up to 1.35x cheapest unit cost so the game NEVER stalls.
+  if (totalAllyPresence === 0 && teamState.gold < cheapestCost * 1.35) {
+    return Math.round(cheapestCost * 0.36 * econMult);
+  }
+
+  // 2. Underdog & Siege Pressure Trickle (Geridekine & Kuşatma Altındakine Ufak Ufak Telafi Parası):
+  // If enemies are pressing near our fortress, or we are outnumbered / behind in HP or Era,
+  // provide a balanced comeback trickle (capped when gold is already high so it cannot be abused by rich players).
+  const isOutnumbered = activeEnemyUnits > activeAllyUnits;
+  const isBehindHp = myHpRatio + 0.12 < enemyHpRatio;
+  const isBehindEra = enemyEra > teamState.era;
+  const isPinnedAtGate = enemiesNearMyBase >= 1;
+
+  if (
+    teamState.gold < cheapestCost * 2.4 &&
+    (isPinnedAtGate || isOutnumbered || isBehindHp || isBehindEra)
+  ) {
+    let pressureFactor = 0.08;
+    if (isPinnedAtGate) pressureFactor += Math.min(0.2, enemiesNearMyBase * 0.055);
+    if (isOutnumbered) pressureFactor += Math.min(0.14, (activeEnemyUnits - activeAllyUnits) * 0.035);
+    if (isBehindHp) pressureFactor += Math.min(0.12, (enemyHpRatio - myHpRatio) * 0.22);
+    if (isBehindEra) pressureFactor += 0.1;
+    return Math.max(4, Math.round(cheapestCost * pressureFactor * econMult));
+  }
+
+  // 3. Low-Gold Combat Recovery (Cephe Lojistik Desteği):
+  if (teamState.gold < cheapestCost) {
+    return Math.round(cheapestCost * 0.18 * econMult);
+  }
+
+  // 4. Stalemate Breaker: if neither side has any units on the field and gold is below 2x cheapest unit
+  if (totalAllyPresence === 0 && activeEnemyUnits === 0 && teamState.gold < cheapestCost * 2) {
+    return Math.round(cheapestCost * 0.26 * econMult);
+  }
+
+  return 0;
+}
+
+export function calculateFortressHitComebackReward(
+  defenderTeam: TeamState,
+  attackerTeam: TeamState,
+  damageDealt: number
+): { comebackGold: number; comebackXp: number; cooldownReductionSec: number } {
+  // When a fortress is taking hits, give the defending player small emergency gold, XP & faster special cooldown
+  // so getting pushed to your castle Gate allows a tactical comeback instead of an instant snowball loss!
+  const econMult = 1 + defenderTeam.doctrines.economyLevel * 0.2;
+  const defenderHpRatio = defenderTeam.hp / Math.max(1, defenderTeam.maxHp);
+  const attackerHpRatio = attackerTeam.hp / Math.max(1, attackerTeam.maxHp);
+  const behindMult = defenderHpRatio < attackerHpRatio ? 1.35 : 1.0;
+
+  const comebackGold = Math.max(
+    3,
+    Math.round(damageDealt * 0.26 * econMult * behindMult)
+  );
+  const comebackXp = Math.max(2, Math.round(damageDealt * 0.18 * econMult));
+  const cooldownReductionSec = Math.min(2.2, Math.max(0.35, damageDealt / 180));
+
+  return { comebackGold, comebackXp, cooldownReductionSec };
+}
+
+export interface SituationalSpecialProfile {
+  modeLabel: string;
+  projectileType: ProjectilePoolItem['type'];
+  projectileCount: number;
+  damagePerHit: number;
+  splashRadius: number;
+  knockback: number;
+  supplyGoldBonus: number;
+  supplyXpBonus: number;
+  targetXs: number[];
+}
+
+export function calculateSituationalSpecialProfile(
+  casterTeam: TeamState,
+  enemyTeam: TeamState,
+  units: ActiveUnit[]
+): SituationalSpecialProfile {
+  const era = casterTeam.era;
+  const dir = casterTeam.team === 1 ? 1 : -1;
+  const myBaseX = casterTeam.team === 1 ? TEAM1_BASE_X : TEAM2_BASE_X;
+  const enemyBaseX = casterTeam.team === 1 ? TEAM2_BASE_X : TEAM1_BASE_X;
+
+  const allyUnits = units.filter((u) => u.team === casterTeam.team && u.state !== 'ko');
+  const enemyUnits = units.filter((u) => u.team !== casterTeam.team && u.state !== 'ko');
+  const enemiesNearMyBase = enemyUnits.filter((u) => Math.abs(u.x - myBaseX) < 780);
+  const alliesNearEnemyBase = allyUnits.filter((u) => Math.abs(u.x - enemyBaseX) < 840);
+
+  const isUnderSiege =
+    enemiesNearMyBase.length >= 1 ||
+    enemyUnits.length > allyUnits.length ||
+    casterTeam.hp < casterTeam.maxHp * 0.65;
+  const isVanguardPush = !isUnderSiege && alliesNearEnemyBase.length >= 2;
+
+  // Cataclysmic Ultimate Power across all 5 Eras (wipes entire armies across the lane!)
+  const eraBaseCounts = [36, 52, 42, 46, 50];
+  const eraBaseDamages = [680, 1250, 2600, 5600, 12500];
+  const eraBaseSplash = [195, 175, 215, 240, 275];
+  const eraBaseKnockback = [165, 130, 185, 210, 245];
+  const eraProjectileTypes: ProjectilePoolItem['type'][] = [
+    'meteor',
+    'arrow',
+    'cannon',
+    'airstrike',
+    'orbital',
+  ];
+
+  const warfareMult = 1 + casterTeam.doctrines.warfareLevel * 0.16;
+  let situationalMult = 1.0;
+  let countMult = 1.0;
+  let modeLabel = 'KIYAMET TAARRUZ BARAJI';
+
+  if (isUnderSiege) {
+    // Outnumbered / defending base -> Cataclysmic Siege-Breaker boost + emergency gold supply
+    situationalMult = 1.55;
+    countMult = 1.45;
+    modeLabel = 'SON DİRENİŞ KIYAMET BARAJI (+%55 GÜÇ)';
+  } else if (isVanguardPush) {
+    // Pushing enemy base -> Concentrated Siege Bombardment
+    situationalMult = 1.35;
+    countMult = 1.3;
+    modeLabel = 'KUŞATMA YARMA KIYAMETİ (+%35 GÜÇ)';
+  } else if (enemyTeam.era > casterTeam.era) {
+    // Behind in Era -> Catch-up Overcharge
+    situationalMult = 1.45;
+    countMult = 1.35;
+    modeLabel = 'DENGELEYİCİ SÜPER KIYAMET (+%45 GÜÇ)';
+  }
+
+  const projectileCount = Math.round((eraBaseCounts[era] ?? 38) * countMult);
+  const damagePerHit = Math.round((eraBaseDamages[era] ?? 750) * warfareMult * situationalMult);
+  const splashRadius = Math.round((eraBaseSplash[era] ?? 185) * (isUnderSiege ? 1.25 : 1.0));
+  const knockback = Math.round((eraBaseKnockback[era] ?? 150) * (isUnderSiege ? 1.4 : 1.0));
+
+  const cheapestCost = getCheapestEraUnitCost(era);
+  const supplyGoldBonus = Math.round(
+    cheapestCost * (isUnderSiege ? 2.2 : 1.2) * (1 + casterTeam.doctrines.economyLevel * 0.22)
+  );
+  const supplyXpBonus = Math.round(supplyGoldBonus * 1.4);
+
+  // Build smart target X coordinates based on live battlefield state ("duruma göre")
+  const targetXs: number[] = [];
+  const startX = casterTeam.team === 1 ? 260 : WORLD_WIDTH - 260;
+  const laneSpan = WORLD_WIDTH - 520;
+
+  for (let i = 0; i < projectileCount; i++) {
+    if (enemyUnits.length > 0 && i % 3 !== 2) {
+      // 2/3 of projectiles lock directly onto live enemy units & clusters!
+      const pickedEnemy = enemyUnits[i % enemyUnits.length];
+      const spread = ((i * 53) % 150) - 75;
+      const tx = Math.max(210, Math.min(WORLD_WIDTH - 210, pickedEnemy.x + spread));
+      targetXs.push(tx);
+    } else if (isVanguardPush) {
+      // Focus bombardment on the enemy half of the map & enemy fortress perimeter
+      const ratio = 0.35 + (i / Math.max(1, projectileCount - 1)) * 0.62;
+      const tx = startX + dir * (laneSpan * ratio);
+      targetXs.push(Math.max(210, Math.min(WORLD_WIDTH - 210, tx)));
+    } else {
+      // Full-corridor rolling barrage from friendly frontline to enemy base
+      const ratio = i / Math.max(1, projectileCount - 1);
+      const tx = startX + dir * (laneSpan * ratio);
+      targetXs.push(Math.max(210, Math.min(WORLD_WIDTH - 210, tx)));
+    }
+  }
+
+  return {
+    modeLabel,
+    projectileType: eraProjectileTypes[era] ?? 'meteor',
+    projectileCount,
+    damagePerHit,
+    splashRadius,
+    knockback,
+    supplyGoldBonus,
+    supplyXpBonus,
+    targetXs,
+  };
+}
+
+export function calculateArchetypeCounterMultiplier(
+  attackerArchetype: UnitDefinition['archetype'] | undefined,
+  targetArchetype: UnitDefinition['archetype']
+): { damageMult: number; armorPenetration: number } {
+  if (!attackerArchetype) {
+    return { damageMult: 1.0, armorPenetration: 0 };
+  }
+  // Swarmer (Slot 1): Giant Slayer (+25% damage & 25% armor pen vs Colossus)
+  if (attackerArchetype === 'swarmer' && targetArchetype === 'colossus') {
+    return { damageMult: 1.25, armorPenetration: 0.25 };
+  }
+  // Ranger (Slot 2): Armor Piercing (+35% damage & 50% armor pen vs Colossus, +20% vs Charger)
+  if (attackerArchetype === 'ranger') {
+    if (targetArchetype === 'colossus') {
+      return { damageMult: 1.35, armorPenetration: 0.5 };
+    }
+    if (targetArchetype === 'charger') {
+      return { damageMult: 1.2, armorPenetration: 0.35 };
+    }
+  }
+  // Charger (Slot 3): Flank Strike (+25% damage vs Ranger)
+  if (attackerArchetype === 'charger' && targetArchetype === 'ranger') {
+    return { damageMult: 1.25, armorPenetration: 0.15 };
+  }
+  return { damageMult: 1.0, armorPenetration: 0 };
 }
 
 export function calculateKillBountyMultiplier(teamState: TeamState): number {
   // Economy (Ganimet) doctrine increases gold & XP earned per enemy kill by +22% per level
   return 1 + teamState.doctrines.economyLevel * 0.22;
+}
+
+export function calculateProximityBountyRatio(
+  killerTeam: TeamId,
+  killX: number
+): { multiplier: number; bonusPercent: number; progress: number } {
+  const span = Math.max(1, TEAM2_BASE_X - TEAM1_BASE_X);
+  const rawProgress =
+    killerTeam === 1
+      ? (killX - TEAM1_BASE_X) / span
+      : (TEAM2_BASE_X - killX) / span;
+  const progress = Math.max(0, Math.min(1, rawProgress));
+  // Turtling at own base (progress=0) yields 45% (0.45x).
+  // Pushing to enemy base (progress=1) yields 225% (2.25x) — 5x more gold than turtling!
+  const multiplier = Number((0.45 + Math.pow(progress, 1.15) * 1.8).toFixed(2));
+  const bonusPercent = Math.round(multiplier * 100);
+  return { multiplier, bonusPercent, progress };
 }
 
 export function calculateEffectiveUnitStats(def: UnitDefinition, teamState: TeamState) {
@@ -65,7 +310,7 @@ export function calculateEffectiveUnitStats(def: UnitDefinition, teamState: Team
     shield: Math.round(def.shield * fortressMult),
     damage: Math.round(def.damage * warfareMult),
     moveSpeed: def.moveSpeed * (1 + teamState.doctrines.warfareLevel * 0.03),
-    armor: Math.min(0.6, def.armor + teamState.doctrines.fortressLevel * 0.025),
+    armor: Math.min(0.5, def.armor + teamState.doctrines.fortressLevel * 0.02),
   };
 }
 
@@ -187,7 +432,7 @@ export function evolveEra(teamState: TeamState): boolean {
   teamState.hp = Math.min(teamState.maxHp, teamState.hp + hpGain + Math.round(nextEra.baseMaxHp * 0.15));
   teamState.trailingHp = Math.max(teamState.trailingHp, teamState.hp);
   teamState.specialMaxCooldown = nextEra.specialCooldown;
-  teamState.specialCooldown = Math.min(teamState.specialCooldown, 4);
+  teamState.specialCooldown = Math.min(teamState.specialCooldown, 12);
   return true;
 }
 
@@ -273,12 +518,14 @@ export function applyDamageToUnit(
   target: ActiveUnit,
   rawDamage: number,
   knockbackDir: number,
-  knockbackPower: number
+  knockbackPower: number,
+  armorPenetration = 0
 ): { actualDamage: number; killed: boolean } {
   if (target.state === 'ko' || target.hp <= 0) {
     return { actualDamage: 0, killed: false };
   }
-  let remaining = Math.max(1, Math.round(rawDamage * (1 - target.armor)));
+  const effectiveArmor = Math.max(0, target.armor * (1 - Math.min(1, armorPenetration)));
+  let remaining = Math.max(1, Math.round(rawDamage * (1 - effectiveArmor)));
   if (target.shield > 0) {
     const absorbed = Math.min(target.shield, remaining);
     target.shield -= absorbed;
@@ -292,9 +539,9 @@ export function applyDamageToUnit(
   // Apply knockback resisted by colossus/swarmer weight
   const weightResist =
     target.archetype === 'colossus'
-      ? 0.22
+      ? 0.25
       : target.archetype === 'charger'
-      ? 0.5
+      ? 0.55
       : 1.0;
   target.x = Math.max(
     TEAM1_BASE_X + 40,
@@ -364,17 +611,17 @@ export function decideAICommand(
   }
 
   // 2. Cast Special Power if enemies are clustered or pushing AI base
-  if (aiTeam.specialCooldown <= 0 && elapsedTime > 15) {
+  if (aiTeam.specialCooldown <= 0 && elapsedTime > 18) {
     const enemyUnits = units.filter((u) => u.team !== aiTeam.team && u.state !== 'ko');
-    const threatsNearBase = enemyUnits.filter((u) => Math.abs(u.x - TEAM2_BASE_X) < 650);
+    const threatsNearBase = enemyUnits.filter((u) => Math.abs(u.x - TEAM2_BASE_X) < 680);
     if (enemyUnits.length >= 4 || threatsNearBase.length >= 2) {
       return { type: 'CAST_SPECIAL', team: aiTeam.team };
     }
   }
 
   // 3. Build or update turret if under pressure or well-funded
-  const turretTierId = `turret_era${aiTeam.era}_${aiTeam.gold > 380 * (aiTeam.era + 1) ? 1 : 0}`;
-  if (aiTeam.turrets[0] === null && aiTeam.gold >= 130 * (aiTeam.era + 1)) {
+  const turretTierId = `turret_era${aiTeam.era}_${aiTeam.gold > 420 * (aiTeam.era + 1) ? 1 : 0}`;
+  if (aiTeam.turrets[0] === null && aiTeam.gold >= 140 * (aiTeam.era + 1)) {
     return {
       type: 'BUILD_TURRET',
       team: aiTeam.team,
@@ -386,8 +633,8 @@ export function decideAICommand(
   if (
     difficulty !== 'normal' &&
     aiTeam.unlockedTurretSlots < 2 &&
-    aiTeam.gold >= 320 &&
-    elapsedTime > 35
+    aiTeam.gold >= 340 &&
+    elapsedTime > 40
   ) {
     return { type: 'UNLOCK_SLOT', team: aiTeam.team };
   }
@@ -395,7 +642,7 @@ export function decideAICommand(
   if (
     aiTeam.unlockedTurretSlots >= 2 &&
     aiTeam.turrets[1] === null &&
-    aiTeam.gold >= 260 * (aiTeam.era + 1)
+    aiTeam.gold >= 280 * (aiTeam.era + 1)
   ) {
     return {
       type: 'BUILD_TURRET',
@@ -422,17 +669,24 @@ export function decideAICommand(
   if (aiTeam.queue.length >= 3) return null;
 
   const myUnits = units.filter((u) => u.team === aiTeam.team && u.state !== 'ko');
+  const enemyColossusCount = units.filter(
+    (u) => u.team !== aiTeam.team && u.state !== 'ko' && u.archetype === 'colossus'
+  ).length;
   const hasFrontline = myUnits.some(
     (u) => u.archetype === 'swarmer' || u.archetype === 'colossus' || u.archetype === 'charger'
   );
   const rangerCount = myUnits.filter((u) => u.archetype === 'ranger').length;
+  const colossusCount = myUnits.filter((u) => u.archetype === 'colossus').length;
 
   let chosenSlot = 0;
-  if (!hasFrontline) {
-    chosenSlot = aiTeam.gold >= 120 * Math.pow(2, aiTeam.era) ? 2 : 0;
+  if (enemyColossusCount > 0 && rangerCount < 3) {
+    // Counter enemy Colossus with Armor-Piercing Rangers & Swarmers!
+    chosenSlot = myUnits.length === 0 ? 0 : 1;
+  } else if (!hasFrontline) {
+    chosenSlot = aiTeam.gold >= 165 * Math.pow(2.05, aiTeam.era) ? 2 : 0;
   } else if (rangerCount < 2) {
     chosenSlot = 1;
-  } else if (aiTeam.gold >= 240 * Math.pow(1.9, aiTeam.era)) {
+  } else if (colossusCount === 0 && aiTeam.gold >= 380 * Math.pow(2.05, aiTeam.era)) {
     chosenSlot = 3;
   } else {
     chosenSlot = Math.floor((elapsedTime * 7) % 3);
@@ -458,7 +712,7 @@ export function decideAICommand(
 
   // Fallback to swarmer if short on gold and enemy is close to AI base
   const urgentThreat = units.some(
-    (u) => u.team !== aiTeam.team && u.state !== 'ko' && u.x > TEAM2_BASE_X - 450
+    (u) => u.team !== aiTeam.team && u.state !== 'ko' && u.x > TEAM2_BASE_X - 480
   );
   if (urgentThreat && canQueueUnit(aiTeam, `era${aiTeam.era}_swarmer`)) {
     return {

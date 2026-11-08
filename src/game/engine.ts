@@ -9,7 +9,12 @@ import {
 import {
   applyBattleCommand,
   applyDamageToUnit,
+  calculateAntiStallSupplyPerSecond,
+  calculateArchetypeCounterMultiplier,
+  calculateFortressHitComebackReward,
   calculateKillBountyMultiplier,
+  calculateProximityBountyRatio,
+  calculateSituationalSpecialProfile,
   checkWinCondition,
   createActiveUnit,
   createInitialTeamState,
@@ -28,10 +33,12 @@ import {
   RunSummarySnapshot,
   TeamId,
   TeamState,
+  UnitDefinition,
+  WorldSyncSnapshot,
 } from './types';
 
 const PARTICLE_POOL_SIZE = 512;
-const PROJECTILE_POOL_SIZE = 128;
+const PROJECTILE_POOL_SIZE = 256;
 const FLOATING_TEXT_POOL_SIZE = 64;
 
 export interface HUDStateSnapshot {
@@ -40,6 +47,7 @@ export interface HUDStateSnapshot {
   playerTeam: TeamId;
   elapsedTime: number;
   cameraX: number;
+  frontlineBonusPct: number;
   unitRadar: Array<{ x: number; team: TeamId; archetype: string }>;
   activeBanner: { text: string; color: string; timer: number } | null;
 }
@@ -81,17 +89,21 @@ export class BattleSimulationEngine {
 
   private onHudSync?: (snapshot: HUDStateSnapshot) => void;
   private onGameOver?: (summary: RunSummarySnapshot) => void;
+  private onStateBroadcast?: (snapshot: WorldSyncSnapshot) => void;
   private hudSyncAccumulator = 0;
+  private netSyncAccumulator = 0;
 
   // Ambient star/dust seeds
   private stars: Array<{ x: number; y: number; r: number; a: number }> = [];
 
   constructor(
     onHudSync?: (snapshot: HUDStateSnapshot) => void,
-    onGameOver?: (summary: RunSummarySnapshot) => void
+    onGameOver?: (summary: RunSummarySnapshot) => void,
+    onStateBroadcast?: (snapshot: WorldSyncSnapshot) => void
   ) {
     this.onHudSync = onHudSync;
     this.onGameOver = onGameOver;
+    this.onStateBroadcast = onStateBroadcast;
 
     for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
       this.particles.push({
@@ -351,7 +363,7 @@ export class BattleSimulationEngine {
     pr.color = color;
     pr.radius = radius;
     pr.life = 0;
-    pr.maxLife = 4.0;
+    pr.maxLife = 6.5;
     pr.rotation = Math.atan2(vy, vx);
   }
 
@@ -371,7 +383,8 @@ export class BattleSimulationEngine {
 
     if (cmd.type === 'CAST_SPECIAL') {
       if (targetTeam.specialCooldown > 0) return false;
-      targetTeam.specialCooldown = targetTeam.specialMaxCooldown;
+      const warfareCdMult = Math.max(0.7, 1 - targetTeam.doctrines.warfareLevel * 0.06);
+      targetTeam.specialCooldown = Math.round(targetTeam.specialMaxCooldown * warfareCdMult);
       this.triggerSpecialPower(targetTeam);
       this.emitHudSnapshot();
       return true;
@@ -401,48 +414,59 @@ export class BattleSimulationEngine {
 
   private triggerSpecialPower(teamState: TeamState): void {
     const era = ERAS[teamState.era];
+    const enemyTeam = teamState.team === 1 ? this.team2 : this.team1;
+    const profile = calculateSituationalSpecialProfile(teamState, enemyTeam, this.units);
+
+    // Grant tactical supply bonus on cast so using your ultimate helps break sieges & fund counter-attacks
+    teamState.gold += profile.supplyGoldBonus;
+    teamState.totalGoldEarned += profile.supplyGoldBonus;
+    teamState.xp += profile.supplyXpBonus;
+
     this.activeBanner = {
-      text: `${teamState.name}: ${era.specialName.toUpperCase()}!`,
+      text: `${era.specialName.toUpperCase()} · ${profile.modeLabel}!`,
       color: era.accentColor,
-      timer: 2.5,
+      timer: 3.4,
     };
     soundEngine.playSpecialPower();
-    this.cameraTrauma = Math.min(1, this.cameraTrauma + 0.65);
-    this.hitstopTimer = 0.05;
+    this.cameraTrauma = 1.0;
+    this.hitstopTimer = 0.06;
 
     const dir = teamState.team === 1 ? 1 : -1;
-    const startX = teamState.team === 1 ? 360 : WORLD_WIDTH - 360;
-    const projectileCount = 11 + teamState.era * 2;
-    const baseDamage = 135 * Math.pow(1.95, teamState.era);
+    const baseX = teamState.team === 1 ? TEAM1_BASE_X : TEAM2_BASE_X;
+    this.spawnFloatingText(
+      baseX + dir * 70,
+      GROUND_Y - 170,
+      `+${profile.supplyGoldBonus}A İKMAL · KIYAMET ATEŞİ!`,
+      era.accentColor,
+      1.2
+    );
 
-    for (let i = 0; i < projectileCount; i++) {
-      const targetX = startX + dir * (i * 155 + (Math.random() - 0.5) * 90);
-      const clampedX = Math.max(260, Math.min(WORLD_WIDTH - 260, targetX));
-      const spawnY = -40 - i * 48;
-      const pType =
-        teamState.era === 0
-          ? 'meteor'
-          : teamState.era === 1
-          ? 'arrow'
-          : teamState.era === 2
-          ? 'cannon'
-          : teamState.era === 3
-          ? 'airstrike'
-          : 'orbital';
+    for (let i = 0; i < profile.projectileCount; i++) {
+      const targetX = profile.targetXs[i] ?? WORLD_WIDTH * 0.5;
+      // Spread spawnY across -45 to -1600 so the cataclysmic barrage rains down continuously for 3.5-4.5 seconds!
+      const spawnY = -45 - i * 26 - (i % 4) * 18;
+      const horizontalLead = dir * (profile.projectileType === 'arrow' ? 165 : 115);
+      const vx = dir * (profile.projectileType === 'arrow' ? 225 : 155);
+      const vy =
+        profile.projectileType === 'orbital'
+          ? 780 + (i % 5) * 35
+          : profile.projectileType === 'arrow'
+          ? 640 + (i % 5) * 30
+          : 560 + (i % 5) * 28;
 
       this.spawnProjectile(
         teamState.team,
-        pType,
-        clampedX - dir * 110,
+        profile.projectileType,
+        targetX - horizontalLead,
         spawnY,
-        dir * 165,
-        560 + Math.random() * 120,
-        180,
-        baseDamage,
-        115,
-        85,
+        vx,
+        vy,
+        190,
+        profile.damagePerHit,
+        profile.splashRadius,
+        profile.knockback,
         era.accentColor,
-        teamState.era >= 3 ? 11 : 9
+        profile.projectileType === 'arrow' ? 8 : teamState.era >= 3 ? 13 : 11
       );
     }
   }
@@ -624,27 +648,65 @@ export class BattleSimulationEngine {
       this.hudSyncAccumulator = 0;
       this.emitHudSnapshot();
     }
+
+    // Host (Team 1) periodically broadcasts authoritative world snapshot in Online Mode
+    if (this.lifecycle === 'playing' && this.mode === 'online' && this.playerTeam === 1) {
+      this.netSyncAccumulator += dt;
+      if (this.netSyncAccumulator >= 0.35) {
+        this.netSyncAccumulator = 0;
+        this.onStateBroadcast?.(this.exportWorldSnapshot());
+      }
+    }
   }
 
   private stepTeamState(team: TeamState, dt: number): void {
-    // Emergency anti-softlock: ONLY if a human player has 0 units on field, 0 in queue, 0 turrets, and < 35 gold,
-    // trickle 3 gold/sec up to 35 so the battle can never permanently freeze. Otherwise 0 passive gold & 0 passive XP!
-    if (team.gold < 35 && team.queue.length === 0 && team.turrets.every((t) => t === null)) {
-      const hasAnyUnit = this.units.some((u) => u.team === team.team && u.state !== 'ko');
-      if (!hasAnyUnit) {
-        team.gold = Math.min(35, team.gold + 4 * dt);
+    const enemyTeam = team.team === 1 ? this.team2 : this.team1;
+    const myBaseX = team.team === 1 ? TEAM1_BASE_X : TEAM2_BASE_X;
+    let allyCount = 0;
+    let enemyCount = 0;
+    let enemiesNearMyBase = 0;
+    for (const u of this.units) {
+      if (u.state === 'ko') continue;
+      if (u.team === team.team) {
+        allyCount++;
+      } else {
+        enemyCount++;
+        if (Math.abs(u.x - myBaseX) < 680) {
+          enemiesNearMyBase++;
+        }
+      }
+    }
+
+    // Dynamic Anti-Stall & Underdog Comeback Supply:
+    // Standing idle with a rich treasury gives 0 gold, but if you are behind, outnumbered,
+    // pinned at your gate, or out of units/gold, the game supplies emergency logistics so it NEVER stalls!
+    if (this.lifecycle === 'playing') {
+      const supplyPerSec = calculateAntiStallSupplyPerSecond(
+        team,
+        allyCount,
+        enemyCount,
+        enemiesNearMyBase,
+        enemyTeam.era,
+        enemyTeam.hp / Math.max(1, enemyTeam.maxHp)
+      );
+      if (supplyPerSec > 0) {
+        const gain = supplyPerSec * dt;
+        team.gold += gain;
+        team.totalGoldEarned += gain;
       }
     }
 
     if (team.doctrines.fortressLevel > 0 && team.hp > 0 && team.hp < team.maxHp) {
       team.hp = Math.min(
         team.maxHp,
-        team.hp + team.doctrines.fortressLevel * (3 + team.era * 2.5) * dt
+        team.hp + team.doctrines.fortressLevel * (5 + team.era * 4.5) * dt
       );
     }
 
     if (team.specialCooldown > 0) {
-      team.specialCooldown = Math.max(0, team.specialCooldown - dt);
+      // Situational Cooldown Acceleration: if enemies are pressing your base, special power charges up to 45% faster!
+      const siegeHaste = enemiesNearMyBase >= 2 ? 1.45 : enemiesNearMyBase === 1 ? 1.2 : 1.0;
+      team.specialCooldown = Math.max(0, team.specialCooldown - dt * siegeHaste);
     }
 
     if (team.queue.length > 0) {
@@ -673,6 +735,8 @@ export class BattleSimulationEngine {
   private stepTurrets(team: TeamState, dt: number): void {
     const baseX = team.team === 1 ? TEAM1_BASE_X : TEAM2_BASE_X;
     const dir = team.team === 1 ? 1 : -1;
+    const fortressDocLevel = team.doctrines.fortressLevel;
+    const warfareDocLevel = team.doctrines.warfareLevel;
 
     for (let i = 0; i < 4; i++) {
       const t = team.turrets[i];
@@ -685,10 +749,11 @@ export class BattleSimulationEngine {
 
       const turretX = baseX + dir * 24;
       const turretY = GROUND_Y - 115 - i * 44;
+      const effectiveRange = def.range * (1 + fortressDocLevel * 0.06);
 
       // Find nearest enemy unit within range
       let bestTarget: ActiveUnit | null = null;
-      let bestDist = def.range;
+      let bestDist = effectiveRange;
       for (const u of this.units) {
         if (u.team === team.team || u.state === 'ko') continue;
         const d = Math.abs(u.x - turretX);
@@ -704,8 +769,12 @@ export class BattleSimulationEngine {
         t.aimAngle = Math.atan2(dy, dx);
 
         if (t.cooldown <= 0) {
-          const levelMult = 1 + (t.level - 1) * 0.32;
-          t.cooldown = def.fireInterval / (1 + (t.level - 1) * 0.12);
+          const levelMult =
+            (1 + (t.level - 1) * 0.35) *
+            (1 + warfareDocLevel * 0.12) *
+            (bestDist < 340 ? 1.25 : 1.0); // +25% Point-Blank Gate Defense bonus!
+          const fireRateBoost = (1 + (t.level - 1) * 0.14) * (1 + fortressDocLevel * 0.08);
+          t.cooldown = def.fireInterval / fireRateBoost;
           t.recoil = 1;
 
           const speed =
@@ -729,7 +798,7 @@ export class BattleSimulationEngine {
             grav,
             Math.round(def.damage * levelMult),
             def.splashRadius,
-            24,
+            def.splashRadius > 50 ? 42 : 24,
             def.accentColor,
             def.splashRadius > 50 ? 7 : 5
           );
@@ -961,7 +1030,8 @@ export class BattleSimulationEngine {
         attacker.splashRadius,
         dir,
         attacker.knockbackPower,
-        targetUnit
+        targetUnit,
+        attacker.archetype
       );
     } else if (hittingBase) {
       this.damageEnemyBase(attacker.team, totalDmg);
@@ -976,7 +1046,8 @@ export class BattleSimulationEngine {
     splashRadius: number,
     dir: number,
     knockback: number,
-    directTarget?: ActiveUnit
+    directTarget?: ActiveUnit,
+    attackerArchetype?: UnitDefinition['archetype']
   ): void {
     const myTeamState = attackerTeam === 1 ? this.team1 : this.team2;
     const enemyTeamState = attackerTeam === 1 ? this.team2 : this.team1;
@@ -999,8 +1070,17 @@ export class BattleSimulationEngine {
         if (u.team === attackerTeam || u.state === 'ko') continue;
         const dist = Math.abs(u.x - impactX);
         if (dist <= splashRadius) {
-          const falloff = u === directTarget ? 1 : Math.max(0.45, 1 - dist / (splashRadius * 1.25));
-          const res = applyDamageToUnit(u, Math.round(damage * falloff), dir, knockback);
+          const falloff =
+            u === directTarget ? 1 : Math.max(0.38, 1 - dist / (splashRadius * 1.2));
+          const counter = calculateArchetypeCounterMultiplier(attackerArchetype, u.archetype);
+          const effectiveDmg = Math.round(damage * falloff * counter.damageMult);
+          const res = applyDamageToUnit(
+            u,
+            effectiveDmg,
+            dir,
+            knockback,
+            counter.armorPenetration
+          );
           if (res.actualDamage > 0) {
             this.spawnFloatingText(
               u.x,
@@ -1015,20 +1095,32 @@ export class BattleSimulationEngine {
           }
         }
       }
-      // Also check if splash hits enemy base
+      // Also check if splash hits enemy base (sky barrages obliterate enemy units, while dealing light structural shake to the castle)
       const enemyBaseX = attackerTeam === 1 ? TEAM2_BASE_X : TEAM1_BASE_X;
       if (Math.abs(enemyBaseX - impactX) <= splashRadius + 55) {
-        this.damageEnemyBase(attackerTeam, Math.round(damage * 0.65));
+        const baseSplashRatio = splashRadius >= 145 ? 0.022 : 0.55;
+        this.damageEnemyBase(attackerTeam, Math.max(4, Math.round(damage * baseSplashRatio)));
       }
     } else if (directTarget) {
-      const res = applyDamageToUnit(directTarget, damage, dir, knockback);
+      const counter = calculateArchetypeCounterMultiplier(
+        attackerArchetype,
+        directTarget.archetype
+      );
+      const effectiveDmg = Math.round(damage * counter.damageMult);
+      const res = applyDamageToUnit(
+        directTarget,
+        effectiveDmg,
+        dir,
+        knockback,
+        counter.armorPenetration
+      );
       if (res.actualDamage > 0) {
         this.spawnFloatingText(
           directTarget.x,
           directTarget.y - directTarget.height - 8,
           `-${res.actualDamage}`,
-          '#f87171',
-          0.95
+          counter.damageMult > 1 ? '#fde047' : '#f87171',
+          counter.damageMult > 1 ? 1.08 : 0.95
         );
       }
       if (res.killed) {
@@ -1044,35 +1136,83 @@ export class BattleSimulationEngine {
   ): void {
     victimTeam.unitsLost += 1;
     const bountyMult = calculateKillBountyMultiplier(killerTeam);
-    // Earned strictly on enemy kills: ~1.35x unit value so killing enemies fuels your war chest
-    const goldEarned = Math.round(victim.rewardGold * 1.85 * bountyMult);
-    const xpEarned = Math.round(victim.rewardXp * 1.45 * bountyMult);
+    const prox = calculateProximityBountyRatio(killerTeam.team, victim.x);
+
+    // If the killer is pinned at their own base and outnumbered, grant a Last-Stand Defense floor (85%)
+    const allyCount = this.units.filter((u) => u.team === killerTeam.team && u.state !== 'ko').length;
+    const enemyCount = this.units.filter((u) => u.team !== killerTeam.team && u.state !== 'ko').length;
+    const effectiveMult =
+      prox.progress < 0.25 && enemyCount > allyCount
+        ? Math.max(0.85, prox.multiplier)
+        : prox.multiplier;
+    const effectivePct = Math.round(effectiveMult * 100);
+
+    const goldEarned = Math.max(
+      6,
+      Math.round(victim.rewardGold * 1.65 * bountyMult * effectiveMult)
+    );
+    const xpEarned = Math.max(
+      8,
+      Math.round(victim.rewardXp * 1.35 * bountyMult * (0.75 + prox.progress * 0.65))
+    );
     killerTeam.gold += goldEarned;
     killerTeam.totalGoldEarned += goldEarned;
     killerTeam.xp += xpEarned;
     this.spawnBurst(victim.x, victim.y - victim.height * 0.5, 14, victim.accentColor, 190, 4.5);
     if (killerTeam.team === this.playerTeam) {
+      const tagColor =
+        effectivePct >= 145
+          ? '#4ade80'
+          : effectivePct <= 70
+          ? '#94a3b8'
+          : '#fde047';
       this.spawnFloatingText(
         victim.x,
         victim.y - victim.height - 26,
-        `+${goldEarned} Altın · +${xpEarned} XP`,
-        '#fde047',
-        1.05
+        `+${goldEarned}A (%${effectivePct}) · +${xpEarned}XP`,
+        tagColor,
+        effectivePct >= 145 ? 1.15 : 1.0
       );
     }
   }
 
   private damageEnemyBase(attackerTeam: TeamId, damage: number): void {
+    const attackerState = attackerTeam === 1 ? this.team1 : this.team2;
     const enemyTeam = attackerTeam === 1 ? this.team2 : this.team1;
     const baseX = attackerTeam === 1 ? TEAM2_BASE_X : TEAM1_BASE_X;
     if (this.lifecycle === 'title') return;
 
-    enemyTeam.hp = Math.max(0, enemyTeam.hp - damage);
+    // Fortress Doctrine reduces incoming castle damage by 6% per level
+    const armorReduction = Math.min(0.3, enemyTeam.doctrines.fortressLevel * 0.06);
+    const finalDamage = Math.max(1, Math.round(damage * (1 - armorReduction)));
+
+    enemyTeam.hp = Math.max(0, enemyTeam.hp - finalDamage);
     enemyTeam.baseHitFlash = 0.08;
     this.spawnBurst(baseX, GROUND_Y - 70, 10, '#f97316', 165, 4.5);
-    this.spawnFloatingText(baseX, GROUND_Y - 140, `-${damage}`, '#fb923c', 1.2);
+    this.spawnFloatingText(baseX, GROUND_Y - 140, `-${finalDamage}`, '#fb923c', 1.2);
     this.cameraTrauma = Math.min(1, this.cameraTrauma + 0.18);
     soundEngine.playHit(true);
+
+    // Grant Defender Comeback Gold, XP & Special Cooldown boost when their fortress is being hit!
+    const comeback = calculateFortressHitComebackReward(enemyTeam, attackerState, finalDamage);
+    enemyTeam.gold += comeback.comebackGold;
+    enemyTeam.totalGoldEarned += comeback.comebackGold;
+    enemyTeam.xp += comeback.comebackXp;
+    if (enemyTeam.specialCooldown > 0) {
+      enemyTeam.specialCooldown = Math.max(
+        0,
+        enemyTeam.specialCooldown - comeback.cooldownReductionSec
+      );
+    }
+    if (enemyTeam.team === this.playerTeam) {
+      this.spawnFloatingText(
+        baseX,
+        GROUND_Y - 175,
+        `+${comeback.comebackGold}A DİRENİŞ İKMALİ`,
+        '#38bdf8',
+        0.95
+      );
+    }
   }
 
   private stepProjectiles(dt: number): void {
@@ -1144,7 +1284,19 @@ export class BattleSimulationEngine {
 
       // Check enemy base collision
       if (Math.abs(pr.x - enemyBaseX) <= 62 && pr.y >= GROUND_Y - 190 && pr.y <= GROUND_Y + 10) {
-        this.damageEnemyBase(pr.team, pr.damage);
+        if (pr.splashRadius >= 145) {
+          this.dealSplashOrSingleDamage(
+            pr.team,
+            pr.x,
+            pr.y,
+            pr.damage,
+            pr.splashRadius,
+            dir,
+            pr.knockback
+          );
+        } else {
+          this.damageEnemyBase(pr.team, pr.damage);
+        }
         pr.active = false;
         continue;
       }
@@ -1200,6 +1352,19 @@ export class BattleSimulationEngine {
 
   public emitHudSnapshot(): void {
     if (!this.onHudSync) return;
+    // Compute player's current frontline position for the HUD Taarruz Ganimeti % indicator
+    let frontlineX = this.playerTeam === 1 ? TEAM1_BASE_X + 95 : TEAM2_BASE_X - 95;
+    for (const u of this.units) {
+      if (u.team === this.playerTeam && u.state !== 'ko') {
+        if (this.playerTeam === 1 && u.x > frontlineX) frontlineX = u.x;
+        if (this.playerTeam === 2 && u.x < frontlineX) frontlineX = u.x;
+      }
+    }
+    const frontlineBonusPct = calculateProximityBountyRatio(
+      this.playerTeam,
+      frontlineX
+    ).bonusPercent;
+
     this.onHudSync({
       team1: {
         ...this.team1,
@@ -1216,11 +1381,85 @@ export class BattleSimulationEngine {
       playerTeam: this.playerTeam,
       elapsedTime: this.elapsedTime,
       cameraX: this.cameraX,
+      frontlineBonusPct,
       unitRadar: this.units
         .filter((u) => u.state !== 'ko')
         .map((u) => ({ x: u.x, team: u.team, archetype: u.archetype })),
       activeBanner: this.activeBanner ? { ...this.activeBanner } : null,
     });
+  }
+
+  public exportWorldSnapshot(): WorldSyncSnapshot {
+    return {
+      elapsedTime: this.elapsedTime,
+      nextUnitUid: this.nextUnitUid,
+      team1: {
+        ...this.team1,
+        turrets: this.team1.turrets.map((t) => (t ? { ...t } : null)),
+        queue: this.team1.queue.map((q) => ({ ...q })),
+        doctrines: { ...this.team1.doctrines },
+      },
+      team2: {
+        ...this.team2,
+        turrets: this.team2.turrets.map((t) => (t ? { ...t } : null)),
+        queue: this.team2.queue.map((q) => ({ ...q })),
+        doctrines: { ...this.team2.doctrines },
+      },
+      units: this.units.map((u) => ({ ...u })),
+      activeBanner: this.activeBanner ? { ...this.activeBanner } : null,
+    };
+  }
+
+  public applyWorldSnapshot(snap: WorldSyncSnapshot): void {
+    if (!snap || typeof snap.elapsedTime !== 'number') return;
+    this.elapsedTime = snap.elapsedTime;
+    this.nextUnitUid = Math.max(this.nextUnitUid, snap.nextUnitUid || 1);
+
+    // Preserve smooth trailingHp while syncing authoritative team stats
+    const t1Trailing = this.team1.trailingHp;
+    const t2Trailing = this.team2.trailingHp;
+    this.team1 = {
+      ...snap.team1,
+      trailingHp: t1Trailing,
+      turrets: snap.team1.turrets.map((t) => (t ? { ...t } : null)),
+      queue: snap.team1.queue.map((q) => ({ ...q })),
+      doctrines: { ...snap.team1.doctrines },
+    };
+    this.team2 = {
+      ...snap.team2,
+      trailingHp: t2Trailing,
+      turrets: snap.team2.turrets.map((t) => (t ? { ...t } : null)),
+      queue: snap.team2.queue.map((q) => ({ ...q })),
+      doctrines: { ...snap.team2.doctrines },
+    };
+
+    // Reconcile active units smoothly by uid
+    const existingByUid = new Map<number, ActiveUnit>();
+    for (const u of this.units) {
+      existingByUid.set(u.uid, u);
+    }
+
+    this.units = (snap.units || []).map((incoming) => {
+      const prev = existingByUid.get(incoming.uid);
+      if (prev) {
+        return {
+          ...incoming,
+          // Smoothly blend X if close, snap if far
+          x: Math.abs(prev.x - incoming.x) < 45 ? prev.x * 0.35 + incoming.x * 0.65 : incoming.x,
+          walkDistance: prev.walkDistance,
+          scaleX: prev.scaleX,
+          scaleY: prev.scaleY,
+          trailingHp: prev.trailingHp,
+          hitFlashTimer: Math.max(prev.hitFlashTimer, incoming.hitFlashTimer),
+        };
+      }
+      return { ...incoming };
+    });
+
+    if (snap.activeBanner) {
+      this.activeBanner = { ...snap.activeBanner };
+    }
+    this.emitHudSnapshot();
   }
 
   public render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
