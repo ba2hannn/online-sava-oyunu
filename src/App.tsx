@@ -5,7 +5,7 @@ import { TitleScreenOverlay } from './components/TitleScreenOverlay';
 import { soundEngine } from './game/audio';
 import { getEraUnits } from './game/catalog';
 import { BattleSimulationEngine, HUDStateSnapshot } from './game/engine';
-import { OnlineGameNetworkManager, OpenRoomInfo } from './game/network';
+import { NetworkCallbacks, OnlineGameNetworkManager, OpenRoomInfo } from './game/network';
 import { createInitialTeamState } from './game/rules';
 import {
   AIDifficulty,
@@ -64,9 +64,13 @@ export default function App() {
     const eng = engineRef.current;
     if (!eng) return;
 
-    const applied = eng.executeCommand(cmd);
-    if (applied && !fromRemote && modeRef.current === 'online') {
-      netRef.current?.sendBattleCommand(cmd);
+    if (fromRemote) {
+      eng.applyRemoteCommand(cmd);
+      return;
+    }
+    const sent = eng.issueLocalCommand(cmd);
+    if (sent && eng.mode === 'online') {
+      netRef.current?.sendBattleCommand(sent);
     }
   }, []);
 
@@ -102,9 +106,29 @@ export default function App() {
     [playerName, syncBodyDataset]
   );
 
-  // Initialize WebSocket Network Manager ONCE so typing name or starting game never drops connection
-  useEffect(() => {
-    const net = new OnlineGameNetworkManager({
+  // An online match cannot be restarted unilaterally (it would reset only one side and,
+  // previously, silently switched the guest to team 1). Leave the room and go back instead.
+  const leaveOnlineMatchToTitle = useCallback(() => {
+    netRef.current?.leaveRoom();
+    setRoomCode(null);
+    setRoomStatus('idle');
+    setSummary(null);
+    if (engineRef.current) {
+      engineRef.current.setupTitleDemo();
+      syncBodyDataset('title');
+    }
+  }, [syncBodyDataset]);
+
+  const handleRestart = useCallback(() => {
+    if (engineRef.current?.mode === 'online') {
+      leaveOnlineMatchToTitle();
+    } else {
+      startNewGame();
+    }
+  }, [leaveOnlineMatchToTitle, startNewGame]);
+
+  const buildNetCallbacks = useCallback(
+    (): NetworkCallbacks => ({
       onStatusChange: (connected, label) => {
         setWsConnected(connected);
         setNetworkLabel(label);
@@ -128,25 +152,62 @@ export default function App() {
           engineRef.current?.applyWorldSnapshot(resumeSnapshot);
         }
       },
+      onRoomSync: ({ roomCode: syncedCode, myTeam, status, team1Name, team2Name, snapshot }) => {
+        const eng = engineRef.current;
+        if (!eng) return;
+        setRoomCode(syncedCode);
+        setOnlineError(null);
+        if (status === 'waiting') {
+          setRoomStatus('waiting');
+          return;
+        }
+        if (status !== 'playing') return;
+        setRoomStatus('playing');
+        const alreadyInMatch =
+          eng.mode === 'online' &&
+          eng.playerTeam === myTeam &&
+          (eng.lifecycle === 'playing' || eng.lifecycle === 'paused');
+        if (!alreadyInMatch) {
+          // Page was reloaded mid-match: rebuild the battle from the last authoritative state.
+          modeRef.current = 'online';
+          setMode('online');
+          startNewGame('online', myTeam, team1Name, team2Name);
+          if (snapshot) eng.applyWorldSnapshot(snapshot);
+        } else if (eng.isNetReplica() && snapshot) {
+          // Stale snapshots are rejected by sequence number inside the engine.
+          eng.applyWorldSnapshot(snapshot);
+        }
+        // A live host keeps its own (newer) simulation and simply resumes broadcasting.
+      },
+      onRoomLost: () => {
+        setRoomCode(null);
+        setRoomStatus('idle');
+      },
       onRemoteCommand: (cmd) => {
         dispatchCommand(cmd, true);
       },
       onStateSnapshot: (snap) => {
-        engineRef.current?.applyWorldSnapshot(snap);
-      },
-      onMatchOver: () => {
-        if (engineRef.current) {
-          engineRef.current.lifecycle = 'gameover';
-          syncBodyDataset('gameover');
+        const eng = engineRef.current;
+        if (eng && eng.isNetReplica()) {
+          eng.applyWorldSnapshot(snap);
         }
       },
-      getWorldSnapshot: () => {
-        return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
+      onMatchOver: (winnerTeam) => {
+        const eng = engineRef.current;
+        if (!eng || eng.mode !== 'online') return;
+        // Ends through the regular outcome path so both players get the summary screen.
+        eng.concludeFromAuthority(winnerTeam);
       },
       onError: (msg) => {
         setOnlineError(msg);
       },
-    });
+    }),
+    [dispatchCommand, startNewGame]
+  );
+
+  // Initialize WebSocket Network Manager ONCE so typing name or starting game never drops connection
+  useEffect(() => {
+    const net = new OnlineGameNetworkManager(buildNetCallbacks());
     netRef.current = net;
 
     const params = new URLSearchParams(window.location.search);
@@ -168,50 +229,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    netRef.current?.updateCallbacks({
-      onStatusChange: (connected, label) => {
-        setWsConnected(connected);
-        setNetworkLabel(label);
-      },
-      onRoomWaiting: (code) => {
-        setRoomCode(code);
-        setRoomStatus('waiting');
-        setOnlineError(null);
-      },
-      onRoomList: (rooms) => {
-        setOpenRooms(rooms);
-      },
-      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode, resumeSnapshot }) => {
-        setRoomCode(startedCode);
-        setRoomStatus('playing');
-        setOnlineError(null);
-        modeRef.current = 'online';
-        setMode('online');
-        startNewGame('online', myTeam, team1Name, team2Name);
-        if (resumeSnapshot) {
-          engineRef.current?.applyWorldSnapshot(resumeSnapshot);
-        }
-      },
-      onRemoteCommand: (cmd) => {
-        dispatchCommand(cmd, true);
-      },
-      onStateSnapshot: (snap) => {
-        engineRef.current?.applyWorldSnapshot(snap);
-      },
-      onMatchOver: () => {
-        if (engineRef.current) {
-          engineRef.current.lifecycle = 'gameover';
-          syncBodyDataset('gameover');
-        }
-      },
-      getWorldSnapshot: () => {
-        return engineRef.current ? engineRef.current.exportWorldSnapshot() : null;
-      },
-      onError: (msg) => {
-        setOnlineError(msg);
-      },
-    });
-  }, [dispatchCommand, startNewGame, syncBodyDataset]);
+    netRef.current?.updateCallbacks(buildNetCallbacks());
+  }, [buildNetCallbacks]);
 
   // Mount Canvas & 60 FPS Simulation Loop once
   useEffect(() => {
@@ -357,6 +376,9 @@ export default function App() {
       // Pause / Resume toggle on Escape or P
       if (code === 'Escape' || code === 'KeyP') {
         e.preventDefault();
+        // Online battles cannot be paused: freezing one side's simulation desyncs it from
+        // the other (the host would stop sending snapshots, the guest would drift).
+        if (modeRef.current === 'online') return;
         if (currentState === 'playing') {
           eng.lifecycle = 'paused';
           syncBodyDataset('paused');
@@ -374,7 +396,8 @@ export default function App() {
       }
 
       if (code === 'KeyR' && (currentState === 'playing' || currentState === 'paused')) {
-        startNewGame();
+        // Restart is local-only; in an online match it would hijack team 1 and desync.
+        if (modeRef.current !== 'online') startNewGame();
         return;
       }
 
@@ -515,12 +538,12 @@ export default function App() {
             setMuted(next);
           }}
           onPause={() => {
-            if (engineRef.current) {
+            if (engineRef.current && engineRef.current.mode !== 'online') {
               engineRef.current.lifecycle = 'paused';
               syncBodyDataset('paused');
             }
           }}
-          onRestart={() => startNewGame()}
+          onRestart={handleRestart}
           onPanCamera={(dir) => {
             uiPanDirRef.current = dir;
           }}
@@ -543,8 +566,12 @@ export default function App() {
             syncBodyDataset('playing');
           }
         }}
-        onRestart={() => startNewGame()}
+        onRestart={handleRestart}
         onReturnTitle={() => {
+          if (engineRef.current?.mode === 'online') {
+            leaveOnlineMatchToTitle();
+            return;
+          }
           if (engineRef.current) {
             engineRef.current.setupTitleDemo();
             syncBodyDataset('title');
