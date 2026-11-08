@@ -5,6 +5,7 @@ import { TitleScreenOverlay } from './components/TitleScreenOverlay';
 import { soundEngine } from './game/audio';
 import { getEraUnits } from './game/catalog';
 import { BattleSimulationEngine, HUDStateSnapshot } from './game/engine';
+import { ServerlessNetworkManager } from './game/network';
 import { createInitialTeamState } from './game/rules';
 import {
   AIDifficulty,
@@ -18,7 +19,7 @@ import {
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<BattleSimulationEngine | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const netRef = useRef<ServerlessNetworkManager | null>(null);
 
   const [lifecycle, setLifecycle] = useState<GameLifecycleState>('title');
   const [mode, setMode] = useState<GameMode>('ai');
@@ -27,13 +28,11 @@ export default function App() {
   const [muted, setMuted] = useState<boolean>(false);
   const [summary, setSummary] = useState<RunSummarySnapshot | null>(null);
 
-  // Online Room state
-  const [wsConnected, setWsConnected] = useState<boolean>(false);
+  // Online Room state (Serverless WebRTC P2P + Hybrid)
+  const [wsConnected, setWsConnected] = useState<boolean>(true);
+  const [networkLabel, setNetworkLabel] = useState<string>('WebRTC P2P Hazır (Sunucusuz)');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomStatus, setRoomStatus] = useState<'idle' | 'waiting' | 'playing'>('idle');
-  const [openRooms, setOpenRooms] = useState<
-    Array<{ code: string; hostName: string; playerCount: number; status: string }>
-  >([]);
   const [onlineError, setOnlineError] = useState<string | null>(null);
 
   const [hud, setHud] = useState<HUDStateSnapshot>(() => ({
@@ -64,21 +63,8 @@ export default function App() {
     if (!eng) return;
 
     const applied = eng.executeCommand(cmd);
-    if (
-      applied &&
-      !fromRemote &&
-      modeRef.current === 'online' &&
-      wsRef.current &&
-      wsRef.current.readyState === WebSocket.OPEN
-    ) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: 'BATTLE_COMMAND',
-          cmdId: `${cmd.team}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          team: cmd.team,
-          command: cmd,
-        })
-      );
+    if (applied && !fromRemote && modeRef.current === 'online') {
+      netRef.current?.sendBattleCommand(cmd);
     }
   }, []);
 
@@ -114,97 +100,80 @@ export default function App() {
     [playerName, syncBodyDataset]
   );
 
-  // Initialize WebSocket connection for Online Multiplayer rooms
-  const clientIdRef = useRef<string>('');
+  // Initialize Serverless WebRTC P2P Network Manager ONCE so typing name or starting game never drops WebRTC connection
+  useEffect(() => {
+    const net = new ServerlessNetworkManager({
+      onStatusChange: (connected, label) => {
+        setWsConnected(connected);
+        setNetworkLabel(label);
+      },
+      onRoomWaiting: (code) => {
+        setRoomCode(code);
+        setRoomStatus('waiting');
+        setOnlineError(null);
+      },
+      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode }) => {
+        setRoomCode(startedCode);
+        setRoomStatus('playing');
+        setOnlineError(null);
+        modeRef.current = 'online';
+        setMode('online');
+        startNewGame('online', myTeam, team1Name, team2Name);
+      },
+      onRemoteCommand: (cmd) => {
+        dispatchCommand(cmd, true);
+      },
+      onError: (msg) => {
+        setOnlineError(msg);
+      },
+    });
+    netRef.current = net;
+
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if (roomParam) {
+      const cleanCode = roomParam.trim().toUpperCase();
+      modeRef.current = 'online';
+      setMode('online');
+      setRoomCode(cleanCode);
+      setTimeout(() => {
+        net.joinRoom(cleanCode, 'Komutan 2');
+      }, 250);
+    }
+
+    return () => {
+      net.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let isUnmounted = false;
-
-    const connectWs = () => {
-      if (isUnmounted) return;
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (!isUnmounted) {
-          setWsConnected(true);
-          const params = new URLSearchParams(window.location.search);
-          const roomParam = params.get('room');
-          if (roomParam) {
-            modeRef.current = 'online';
-            setMode('online');
-            ws.send(
-              JSON.stringify({
-                type: 'JOIN_ROOM',
-                code: roomParam.trim().toUpperCase(),
-                playerName,
-              })
-            );
-          }
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'WELCOME') {
-            if (msg.clientId) clientIdRef.current = msg.clientId;
-            if (Array.isArray(msg.openRooms)) {
-              setOpenRooms(msg.openRooms);
-            }
-          } else if (msg.type === 'ROOM_LIST') {
-            if (Array.isArray(msg.openRooms)) {
-              setOpenRooms(msg.openRooms);
-            }
-          } else if (msg.type === 'ROOM_JOINED') {
-            setRoomCode(msg.code);
-            setRoomStatus(msg.status === 'playing' ? 'playing' : 'waiting');
-            setOnlineError(null);
-          } else if (msg.type === 'MATCH_START') {
-            setRoomCode(msg.code);
-            setRoomStatus('playing');
-            setOnlineError(null);
-            const p1 =
-              msg.players?.find((p: { team: number }) => p.team === 1)?.name || 'Komutan 1';
-            const p2 =
-              msg.players?.find((p: { team: number }) => p.team === 2)?.name || 'Komutan 2';
-            const me = msg.players?.find(
-              (p: { id: string; team: TeamId }) => p.id === clientIdRef.current
-            );
-            const myAssignedTeam: TeamId = me?.team === 2 ? 2 : 1;
-            modeRef.current = 'online';
-            setMode('online');
-            startNewGame('online', myAssignedTeam, p1, p2);
-          } else if (msg.type === 'REMOTE_BATTLE_COMMAND') {
-            const eng = engineRef.current;
-            if (eng && msg.command && msg.command.team !== eng.playerTeam) {
-              dispatchCommand(msg.command, true);
-            }
-          } else if (msg.type === 'ERROR') {
-            setOnlineError(msg.message || 'Oda bağlantısında hata oluştu.');
-          }
-        } catch {
-          // Ignore malformed WS message
-        }
-      };
-
-      ws.onclose = () => {
-        if (!isUnmounted) {
-          setWsConnected(false);
-          reconnectTimer = setTimeout(connectWs, 2500);
-        }
-      };
-    };
-
-    connectWs();
-    return () => {
-      isUnmounted = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      wsRef.current?.close();
-    };
-  }, [dispatchCommand, playerName, startNewGame]);
+    netRef.current?.updateCallbacks({
+      onStatusChange: (connected, label) => {
+        setWsConnected(connected);
+        setNetworkLabel(label);
+      },
+      onRoomWaiting: (code) => {
+        setRoomCode(code);
+        setRoomStatus('waiting');
+        setOnlineError(null);
+      },
+      onMatchStart: ({ team1Name, team2Name, myTeam, roomCode: startedCode }) => {
+        setRoomCode(startedCode);
+        setRoomStatus('playing');
+        setOnlineError(null);
+        modeRef.current = 'online';
+        setMode('online');
+        startNewGame('online', myTeam, team1Name, team2Name);
+      },
+      onRemoteCommand: (cmd) => {
+        dispatchCommand(cmd, true);
+      },
+      onError: (msg) => {
+        setOnlineError(msg);
+      },
+    });
+  }, [dispatchCommand, startNewGame]);
 
   // Mount Canvas & 60 FPS Simulation Loop once
   useEffect(() => {
@@ -445,28 +414,21 @@ export default function App() {
             }
           }}
           wsConnected={wsConnected}
+          networkLabel={networkLabel}
           roomCode={roomCode}
           roomStatus={roomStatus}
-          openRooms={openRooms}
+          openRooms={[]}
           onlineError={onlineError}
           onCreateOnlineRoom={() => {
-            wsRef.current?.send(
-              JSON.stringify({ type: 'CREATE_ROOM', playerName })
-            );
+            netRef.current?.createRoom(playerName);
           }}
           onJoinOnlineRoom={(code) => {
-            wsRef.current?.send(
-              JSON.stringify({ type: 'JOIN_ROOM', code, playerName })
-            );
+            netRef.current?.joinRoom(code, playerName);
           }}
           onQuickMatchOnline={() => {
-            wsRef.current?.send(
-              JSON.stringify({ type: 'QUICK_MATCH', playerName })
-            );
+            netRef.current?.quickMatch(playerName);
           }}
-          onRefreshRooms={() => {
-            wsRef.current?.send(JSON.stringify({ type: 'LIST_ROOMS' }));
-          }}
+          onRefreshRooms={() => {}}
         />
       )}
 

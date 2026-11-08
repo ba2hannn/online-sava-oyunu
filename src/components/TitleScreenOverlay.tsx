@@ -19,6 +19,7 @@ interface TitleScreenOverlayProps {
   onStartGame: () => void;
   // Online Lobby props
   wsConnected: boolean;
+  networkLabel?: string;
   roomCode: string | null;
   roomStatus: 'idle' | 'waiting' | 'playing';
   openRooms: OpenRoomInfo[];
@@ -38,6 +39,7 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
   onSelectDifficulty,
   onStartGame,
   wsConnected,
+  networkLabel,
   roomCode,
   roomStatus,
   openRooms,
@@ -48,6 +50,12 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
   onRefreshRooms,
 }) => {
   const [joinInputCode, setJoinInputCode] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const shareUrl =
+    typeof window !== 'undefined' && roomCode
+      ? `${window.location.origin}${window.location.pathname}?room=${roomCode}`
+      : '';
 
   return (
     <div className="fixed inset-0 z-20 flex flex-col justify-between p-6 md:p-10 pointer-events-none">
@@ -159,37 +167,58 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
                 />
               </label>
               <span className="text-xs font-mono-num text-sky-300">
-                {wsConnected ? 'Sunucu Bağlantısı: Aktif' : 'Sunucuya Bağlanılıyor...'}
+                {networkLabel || (wsConnected ? 'WebRTC P2P Aktif' : 'Ağ Hazırlanıyor...')}
               </span>
             </div>
 
             {roomStatus === 'waiting' && roomCode ? (
-              <div className="p-3 rounded bg-[#090d16] border border-amber-500/60 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-slate-400">Oda Kuruldu · Rakip Bekleniyor</div>
-                  <div className="text-lg font-mono-num font-bold text-amber-400 tracking-widest">
-                    ODA KODU: {roomCode}
+              <div className="p-3.5 rounded bg-[#090d16] border border-amber-500/70 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-slate-400">
+                      Oda Kuruldu · Arkadaşınız Linke Girince Savaş Otomatik Başlar
+                    </div>
+                    <div className="text-lg font-mono-num font-bold text-amber-400 tracking-widest">
+                      ODA KODU: {roomCode}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (shareUrl) {
+                          navigator.clipboard?.writeText(shareUrl).catch(() => {});
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2200);
+                        }
+                      }}
+                      className="px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      {copiedLink ? 'Link Kopyalandı ✓' : 'Davet Linkini Kopyala'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onStartGame}
+                      className="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Bot İle Başla
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
-                      navigator.clipboard?.writeText(shareUrl).catch(() => {});
-                    }}
-                    className="px-3 py-2 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
-                  >
-                    Davet Linkini Kopyala
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onStartGame}
-                    className="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-xs whitespace-nowrap shrink-0 cursor-pointer"
-                  >
-                    Bot İle Başla
-                  </button>
-                </div>
+
+                {shareUrl && (
+                  <div className="flex items-center gap-2 bg-[#111827] border border-slate-800 rounded px-2.5 py-1.5">
+                    <span className="text-[11px] text-slate-400 shrink-0">Davet Linki:</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      aria-label="Paylaşılabilir Oda Davet Linki"
+                      onClick={(e) => e.currentTarget.select()}
+                      className="w-full bg-transparent text-xs font-mono-num text-sky-300 focus:outline-none select-all"
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
