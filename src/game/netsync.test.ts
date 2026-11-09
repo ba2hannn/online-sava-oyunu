@@ -168,8 +168,8 @@ test('co-op: both players keep the same set of units under latency, jitter and h
 
   assert.ok(snapshotsApplied > 200, `expected many snapshots, got ${snapshotsApplied}`);
   assert.ok(staleRejected > 0, 'jitter should have produced some out-of-order snapshots that were dropped');
-  // The 5-slot training queue throttles orders, so not every attempt is accepted.
-  assert.ok(guestCommandsAccepted > 10, `guest orders accepted: ${guestCommandsAccepted}`);
+  // The 5-slot training queue and the supply cap throttle orders, so not every attempt is accepted.
+  assert.ok(guestCommandsAccepted > 5, `guest orders accepted: ${guestCommandsAccepted}`);
   assert.equal(host.team2.unitsSpawned + host.team2.queue.length, guestCommandsAccepted,
     'every guest order must reach the host exactly once');
   assert.equal(guest.getPendingCommandCount(), 0, 'all guest predictions acknowledged');

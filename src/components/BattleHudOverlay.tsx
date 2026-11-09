@@ -5,8 +5,10 @@ import {
   getDoctrineCost,
   getEraTurrets,
   getEraUnits,
+  getSupplyCap,
   getTurretById,
   getUnitById,
+  getUnitSupply,
 } from '../game/catalog';
 import { HUDStateSnapshot } from '../game/engine';
 import { BattleActionCommand, GameMode, TeamId } from '../game/types';
@@ -582,7 +584,7 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                   },
                 ] as const
               ).map((doc) => {
-                const cost = getDoctrineCost(doc.key, doc.level);
+                const cost = getDoctrineCost(doc.key, doc.level, myTeam.era);
                 const maxed = doc.level >= 5;
                 const canAfford = !maxed && myTeam.gold >= cost;
 
@@ -642,6 +644,29 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
           </div>
         )}
 
+        {/* Nüfus göstergesi: güçlü birimler daha fazla nüfus kaplar */}
+        {(() => {
+          const queuedSupply = myTeam.queue.reduce((sum, q) => {
+            const d = getUnitById(q.unitDefId);
+            return sum + (d ? getUnitSupply(d.archetype) : 0);
+          }, 0);
+          const used = (myTeam.fieldSupply ?? 0) + queuedSupply;
+          const cap = getSupplyCap(myTeam.era);
+          return (
+            <div
+              className={`pointer-events-auto rounded-lg border px-3 py-1 text-[11px] font-mono-num font-bold shadow-md ${
+                used >= cap
+                  ? 'bg-rose-950/90 border-rose-500 text-rose-200'
+                  : 'bg-[#0c1018]/94 border-slate-700 text-slate-200'
+              }`}
+              title="Nüfus: Sahadaki + kuyruktaki birimler. Piyade/Menzilli 1, Süvari 2, Dev 4."
+            >
+              NÜFUS {used}/{cap}
+              {used >= cap ? ' · DOLU' : ''}
+            </div>
+          );
+        })()}
+
         {/* Production Queue Strip (if units are training) */}
         {myTeam.queue.length > 0 && (
           <div className="pointer-events-auto flex items-center gap-2 bg-[#0c1018]/94 border border-slate-700 rounded-lg px-3 py-1.5 shadow-md">
@@ -678,7 +703,14 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
           {/* 4 Unit Spawn Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
             {myUnits.map((u, idx) => {
-              const canAfford = myTeam.gold >= u.cost && myTeam.queue.length < 5;
+              const supplyUsed =
+                (myTeam.fieldSupply ?? 0) +
+                myTeam.queue.reduce((sum, q) => {
+                  const d = getUnitById(q.unitDefId);
+                  return sum + (d ? getUnitSupply(d.archetype) : 0);
+                }, 0);
+              const hasSupply = supplyUsed + getUnitSupply(u.archetype) <= getSupplyCap(myTeam.era);
+              const canAfford = myTeam.gold >= u.cost && myTeam.queue.length < 5 && hasSupply;
               return (
                 <button
                   key={u.id}
@@ -713,7 +745,7 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                   <div className="flex items-center justify-between text-xs font-mono-num pt-1 border-t border-slate-800/80">
                     <span className="font-bold text-amber-300">{u.cost} Altın</span>
                     <span className="text-[11px] text-slate-400">
-                      Hasar {u.damage} · Can {u.hp}
+                      Hasar {u.damage} · Can {u.hp} · Nüf {getUnitSupply(u.archetype)}
                     </span>
                   </div>
                 </button>

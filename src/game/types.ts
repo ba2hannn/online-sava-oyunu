@@ -153,6 +153,8 @@ export interface TeamState {
   unitsLost: number;
   totalGoldEarned: number;
   baseHitFlash: number;
+  /** Sahadaki canlı birimlerin toplam nüfusu (motor her karede günceller). */
+  fieldSupply?: number;
 }
 
 export interface ProjectilePoolItem {
