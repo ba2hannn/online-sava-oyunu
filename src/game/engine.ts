@@ -457,13 +457,25 @@ export class BattleSimulationEngine {
         const baseX = targetTeam.team === 1 ? TEAM1_BASE_X : TEAM2_BASE_X;
         this.spawnBurst(baseX, GROUND_Y - 90, 28, newEra.accentColor, 260, 6);
         this.cameraTrauma = Math.min(1, this.cameraTrauma + 0.45);
-        soundEngine.playEraEvolve();
+        soundEngine.playEraEvolve(targetTeam.era);
+      } else if (cmd.type === 'BUILD_TURRET' || cmd.type === 'UPGRADE_TURRET') {
+        soundEngine.playBuild();
       } else {
         soundEngine.playUiClick();
       }
       this.emitHudSnapshot();
+    } else if (this.lifecycle === 'playing' && this.isLocalCommandTeam(cmd.team)) {
+      // yetersiz altın / dolu kuyruk gibi reddedilen oyuncu komutları
+      soundEngine.playUiDeny();
     }
     return ok;
+  }
+
+  /** Bu takıma verilen komut yerel oyuncudan mı geliyor (ses geri bildirimi için)? */
+  private isLocalCommandTeam(team: TeamId): boolean {
+    if (this.mode === 'local2p') return true;
+    if (this.mode === 'ai') return team === 1;
+    return team === this.playerTeam;
   }
 
   /** Online authoritative host (team 1). */
@@ -539,7 +551,7 @@ export class BattleSimulationEngine {
       color: era.accentColor,
       timer: 3.4,
     };
-    soundEngine.playSpecialPower();
+    soundEngine.playSpecialPower(teamState.era);
     this.cameraTrauma = 1.0;
     this.hitstopTimer = 0.06;
 
@@ -585,6 +597,10 @@ export class BattleSimulationEngine {
 
   public step(rawDt: number, cameraMoveDir: number): void {
     const dt = Math.min(rawDt, 0.05);
+    soundEngine.syncMusic(
+      this.lifecycle === 'playing',
+      (this.playerTeam === 1 ? this.team1 : this.team2).era
+    );
 
     // Camera movement works in playing & title
     if (this.lifecycle === 'title') {
@@ -848,7 +864,7 @@ export class BattleSimulationEngine {
           team.unitsSpawned += 1;
           this.spawnBurst(spawned.x, GROUND_Y - 24, 6, spawned.accentColor, 95, 3);
           if (this.lifecycle === 'playing') {
-            soundEngine.playSpawn();
+            soundEngine.playSpawn(spawned.era, spawned.archetype);
           }
         }
       }
@@ -1115,6 +1131,9 @@ export class BattleSimulationEngine {
     }
 
     // Melee / Charger / Colossus direct impact
+    if (this.lifecycle === 'playing') {
+      soundEngine.playMelee(attacker.era, attacker.archetype);
+    }
     let bonusMultiplier = 1;
     if (attacker.archetype === 'charger' && attacker.charging) {
       bonusMultiplier = 1.65;
@@ -1276,6 +1295,10 @@ export class BattleSimulationEngine {
     victim: ActiveUnit
   ): void {
     victimTeam.unitsLost += 1;
+    if (this.lifecycle === 'playing') {
+      soundEngine.playUnitDeath(victim.era, victim.archetype);
+      if (killerTeam.team === this.playerTeam || this.mode === 'local2p') soundEngine.playGold();
+    }
     const bountyMult = calculateKillBountyMultiplier(killerTeam);
     const prox = calculateProximityBountyRatio(killerTeam.team, victim.x);
 
@@ -1332,7 +1355,7 @@ export class BattleSimulationEngine {
     this.spawnBurst(baseX, GROUND_Y - 70, 10, '#f97316', 165, 4.5);
     this.spawnFloatingText(baseX, GROUND_Y - 140, `-${finalDamage}`, '#fb923c', 1.2);
     this.cameraTrauma = Math.min(1, this.cameraTrauma + 0.18);
-    soundEngine.playHit(true);
+    soundEngine.playBaseHit(enemyTeam.era);
 
     // Grant Defender Comeback Gold, XP & Special Cooldown boost when their fortress is being hit!
     const comeback = calculateFortressHitComebackReward(enemyTeam, attackerState, finalDamage);
@@ -1671,7 +1694,7 @@ export class BattleSimulationEngine {
       // Newly spawned on the host: give the replica the same spawn feedback the host shows.
       if (this.isNetReplica() && incoming.state !== 'ko' && this.lifecycle === 'playing') {
         this.spawnBurst(incoming.x, GROUND_Y - 24, 6, incoming.accentColor, 95, 3);
-        soundEngine.playSpawn();
+        soundEngine.playSpawn(incoming.era, incoming.archetype);
       }
       return { ...incoming };
     });
