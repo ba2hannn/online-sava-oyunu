@@ -12,6 +12,14 @@ import { HUDStateSnapshot } from '../game/engine';
 import { BattleActionCommand, GameMode, TeamId } from '../game/types';
 import { ArchetypeSvgIcon, GoldCoinIcon, XpStarIcon } from './GameIcons';
 
+const POWER_ICONS = [
+  'power_meteor',
+  'power_arrows',
+  'power_cannon',
+  'power_bombs',
+  'power_orbital',
+];
+
 interface BattleHudOverlayProps {
   hud: HUDStateSnapshot;
   mode: GameMode;
@@ -495,16 +503,28 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                         defId: tDef.id,
                       })
                     }
-                    className={`flex-1 min-w-[140px] p-2 rounded-lg border text-left transition-colors ${
+                    className={`flex-1 min-w-[150px] p-2 rounded-lg border text-left transition-colors flex items-center gap-2.5 ${
                       myTeam.gold >= tDef.cost
                         ? 'bg-[#151e2e] border-amber-500/70 hover:bg-slate-800 cursor-pointer'
                         : 'bg-slate-900/50 border-slate-800 opacity-50 cursor-not-allowed'
                     }`}
                   >
-                    <div className="text-xs font-bold text-white truncate">{tDef.name}</div>
-                    <div className="text-[11px] text-slate-400 truncate">{tDef.roleClue}</div>
-                    <div className="text-xs font-mono-num font-bold text-amber-400 mt-0.5">
-                      {tDef.cost} Altın · Hasar {tDef.damage}
+                    <div className="w-10 h-10 rounded bg-[#090d16] border border-slate-700/80 shrink-0 flex items-center justify-center overflow-hidden">
+                      <img
+                        src={`/assets/ui/towers/${tDef.id}.png`}
+                        alt={tDef.name}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white truncate">{tDef.name}</div>
+                      <div className="text-[10px] text-slate-400 truncate">{tDef.roleClue}</div>
+                      <div className="text-xs font-mono-num font-bold text-amber-400 mt-0.5">
+                        {tDef.cost} Altın · Hsr {tDef.damage}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -692,28 +712,41 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                       defId: u.id,
                     });
                   }}
-                  className={`p-2 rounded-lg border text-left transition-colors flex flex-col justify-between cursor-pointer ${
+                  className={`p-1.5 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer group ${
                     canAfford
                       ? 'bg-[#141c2b] border-slate-600 hover:border-amber-400 active:scale-[0.98]'
                       : 'bg-[#0e131d] border-slate-800/80 opacity-55'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <ArchetypeSvgIcon archetype={u.archetype} accent={u.accentColor} />
-                      <span className="text-xs font-bold text-white truncate">{u.name}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded bg-[#090d16] border border-slate-700/80 flex items-center justify-center shrink-0 overflow-hidden relative">
+                      <img
+                        src={`/assets/ui/portraits/${u.id}.png`}
+                        alt={u.name}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center -z-10">
+                        <ArchetypeSvgIcon archetype={u.archetype} accent={u.accentColor} />
+                      </div>
                     </div>
-                    <span className="text-[11px] font-mono-num font-bold text-slate-400 shrink-0">
-                      [{idx + 1}]
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-white truncate">{u.name}</span>
+                        <span className="text-[10px] font-mono-num font-bold text-slate-400 shrink-0">
+                          [{idx + 1}]
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate">{u.roleClue}</div>
+                    </div>
                   </div>
 
-                  <div className="text-[11px] text-slate-400 truncate my-0.5">{u.roleClue}</div>
-
-                  <div className="flex items-center justify-between text-xs font-mono-num pt-1 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between text-xs font-mono-num pt-1 border-t border-slate-800/80 mt-1">
                     <span className="font-bold text-amber-300">{u.cost} Altın</span>
-                    <span className="text-[11px] text-slate-400">
-                      Hasar {u.damage} · Can {u.hp}
+                    <span className="text-[10px] text-slate-400">
+                      Hsr {u.damage} · Can {u.hp}
                     </span>
                   </div>
                 </button>
@@ -800,20 +833,32 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 e.currentTarget.blur();
                 onCommand({ type: 'CAST_SPECIAL', team: hud.playerTeam });
               }}
-              className={`px-3.5 py-2 rounded-lg border text-left flex flex-col justify-between transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-colors whitespace-nowrap shrink-0 ${
                 myTeam.specialCooldown <= 0
                   ? 'bg-rose-600 hover:bg-rose-500 text-white border-amber-300 shadow-[0_0_18px_rgba(225,29,72,0.5)] cursor-pointer'
                   : 'bg-[#101520] text-slate-400 border-slate-800 opacity-75 cursor-not-allowed'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span>{myEra.specialName}</span>
-                <span className="font-mono-num text-[11px]">[Space]</span>
+              <div className="w-8 h-8 rounded bg-black/40 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src={`/assets/ui/powers/${POWER_ICONS[myTeam.era] || 'power_meteor'}.png`}
+                  alt="Özel Güç"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
               </div>
-              <div className="text-[11px] font-mono-num font-semibold">
-                {myTeam.specialCooldown > 0
-                  ? `Dolum: ${myTeam.specialCooldown.toFixed(1)}s`
-                  : 'HAZIR · ATEŞLE'}
+              <div className="flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                  <span>{myEra.specialName}</span>
+                  <span className="font-mono-num text-[10px] opacity-80">[Space]</span>
+                </div>
+                <div className="text-[11px] font-mono-num font-semibold">
+                  {myTeam.specialCooldown > 0
+                    ? `Dolum: ${myTeam.specialCooldown.toFixed(1)}s`
+                    : 'HAZIR · ATEŞLE'}
+                </div>
               </div>
             </button>
 

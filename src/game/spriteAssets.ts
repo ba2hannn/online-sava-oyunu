@@ -54,6 +54,7 @@ export class SpriteAssets {
   bases = new Map<string, SpriteImg>();
   towers = new Map<string, { base: SpriteImg; weapon?: SpriteImg }>();
   fx = new Map<string, SpriteImg>();
+  backgrounds = new Map<number, SpriteImg>();
   ready = false;
   private started = false;
 
@@ -62,6 +63,13 @@ export class SpriteAssets {
     if (this.started || typeof window === 'undefined') return Promise.resolve();
     this.started = true;
     const jobs: Promise<unknown>[] = [];
+    for (let e = 0; e < 5; e++) {
+      jobs.push(
+        loadSprite(`${BASE}backgrounds/era${e}.jpg`)
+          .then((s) => void this.backgrounds.set(e, s))
+          .catch(() => undefined)
+      );
+    }
     for (const id of unitIds) {
       jobs.push(loadRig(id).then((r) => void this.rigs.set(id, r)).catch(() => undefined));
     }

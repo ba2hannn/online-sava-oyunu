@@ -99,6 +99,14 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
     <div className="fixed inset-0 z-20 flex flex-col justify-between p-4 md:p-8 pointer-events-none overflow-y-auto">
       {/* Upper Calm Negative Space: Custom SVG Title Lockup */}
       <div className="w-full flex flex-col items-center pt-1 shrink-0">
+        <img
+          src="/assets/ui/modals/title_logo.png"
+          alt="Çağlar Boyu Savaş"
+          className="max-h-24 md:max-h-32 object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.9)] mb-1 pointer-events-auto"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
         <TitleEmblemSvg />
       </div>
 
@@ -387,9 +395,17 @@ export const TitleScreenOverlay: React.FC<TitleScreenOverlayProps> = ({
           type="button"
           data-start="true"
           onClick={onStartGame}
-          className="w-full py-3.5 px-6 rounded-lg bg-amber-500 hover:bg-amber-400 active:translate-y-0.5 text-slate-950 font-display font-extrabold text-lg tracking-wider shadow-[0_6px_20px_rgba(245,158,11,0.35)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="w-full py-3.5 px-6 rounded-lg bg-amber-500 hover:bg-amber-400 active:translate-y-0.5 text-slate-950 font-display font-extrabold text-lg tracking-wider shadow-[0_6px_20px_rgba(245,158,11,0.35)] transition-all flex items-center justify-center gap-3 cursor-pointer group"
         >
-          SAVAŞI BAŞLAT (ENTER / SPACE)
+          <img
+            src="/assets/ui/modals/cta_start.png"
+            alt="Başlat"
+            className="h-7 max-w-[140px] object-contain group-hover:scale-105 transition-transform"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <span>SAVAŞI BAŞLAT (ENTER / SPACE)</span>
         </button>
       </div>
 

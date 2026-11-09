@@ -1753,6 +1753,7 @@ export class BattleSimulationEngine {
     // Scale virtual vertical coordinate so GROUND_Y sits comfortably above bottom dock
     const virtualHeight = 720;
     const scale = height / virtualHeight;
+    const virtualWidth = width / scale;
     const maxCam = this.getMaxCameraX();
     const clampedCamX = Math.max(-60, Math.min(maxCam, this.cameraX));
 
@@ -1761,8 +1762,10 @@ export class BattleSimulationEngine {
     const shakeX = (Math.random() * 2 - 1) * shakeMag;
     const shakeY = (Math.random() * 2 - 1) * shakeMag;
 
-    // 1. Sky Gradient blended from dominant era
+    // 1. Sky & Era Battle Background (illustrated artwork with parallax, or procedural fallback)
     const domEra = ERAS[Math.max(this.team1.era, this.team2.era)];
+    const bgImg = spriteAssets.backgrounds.get(domEra.id);
+
     const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
     skyGrad.addColorStop(0, domEra.skyTop);
     skyGrad.addColorStop(0.75, domEra.skyBottom);
@@ -1773,45 +1776,55 @@ export class BattleSimulationEngine {
     ctx.scale(scale, scale);
     ctx.translate(shakeX, shakeY);
 
-    // 2. Parallax Starfield & Atmospheric Embers
+    if (bgImg) {
+      // Illustrated Era Background with cinematic parallax (0.35x camera track)
+      ctx.save();
+      const parallaxSpeed = 0.35;
+      const bgX = -clampedCamX * parallaxSpeed - 40;
+      const bgW = Math.max(virtualWidth + (WORLD_WIDTH - virtualWidth) * parallaxSpeed + 120, 2400);
+      ctx.drawImage(bgImg.img, bgX, 0, bgW, virtualHeight);
+      ctx.restore();
+    } else {
+      // Fallback: 3. Far Parallax Mountains (0.28x camera speed)
+      ctx.save();
+      ctx.translate(-clampedCamX * 0.28, 0);
+      ctx.fillStyle = '#131926';
+      ctx.beginPath();
+      ctx.moveTo(-200, GROUND_Y);
+      const peaks = [0, 280, 560, 890, 1220, 1560, 1890, 2240, 2600, 2900];
+      const heights = [310, 210, 340, 190, 295, 225, 330, 205, 290, 320];
+      for (let i = 0; i < peaks.length; i++) {
+        ctx.lineTo(peaks[i], heights[i]);
+      }
+      ctx.lineTo(3000, GROUND_Y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Fallback: 4. Midground Ridges & Era Monuments (0.55x camera speed)
+      ctx.save();
+      ctx.translate(-clampedCamX * 0.55, 0);
+      ctx.fillStyle = '#1b2232';
+      ctx.beginPath();
+      ctx.moveTo(-200, GROUND_Y);
+      for (let x = -100; x <= WORLD_WIDTH + 200; x += 220) {
+        const h = GROUND_Y - 110 - ((x * 13) % 75);
+        ctx.lineTo(x, h);
+      }
+      ctx.lineTo(WORLD_WIDTH + 300, GROUND_Y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 2. Parallax Starfield & Atmospheric Embers (subtle overlay)
     for (const s of this.stars) {
       const sx = ((s.x - clampedCamX * 0.15) % WORLD_WIDTH + WORLD_WIDTH) % WORLD_WIDTH;
-      ctx.fillStyle = `rgba(248, 250, 252, ${s.a})`;
+      ctx.fillStyle = `rgba(248, 250, 252, ${s.a * (bgImg ? 0.35 : 1.0)})`;
       ctx.beginPath();
       ctx.arc(sx, s.y, s.r, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    // 3. Far Parallax Mountains (0.28x camera speed)
-    ctx.save();
-    ctx.translate(-clampedCamX * 0.28, 0);
-    ctx.fillStyle = '#131926';
-    ctx.beginPath();
-    ctx.moveTo(-200, GROUND_Y);
-    const peaks = [0, 280, 560, 890, 1220, 1560, 1890, 2240, 2600, 2900];
-    const heights = [310, 210, 340, 190, 295, 225, 330, 205, 290, 320];
-    for (let i = 0; i < peaks.length; i++) {
-      ctx.lineTo(peaks[i], heights[i]);
-    }
-    ctx.lineTo(3000, GROUND_Y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // 4. Midground Ridges & Era Monuments (0.55x camera speed)
-    ctx.save();
-    ctx.translate(-clampedCamX * 0.55, 0);
-    ctx.fillStyle = '#1b2232';
-    ctx.beginPath();
-    ctx.moveTo(-200, GROUND_Y);
-    for (let x = -100; x <= WORLD_WIDTH + 200; x += 220) {
-      const h = GROUND_Y - 110 - ((x * 13) % 75);
-      ctx.lineTo(x, h);
-    }
-    ctx.lineTo(WORLD_WIDTH + 300, GROUND_Y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
 
     // 5. World Space Camera Transform
     ctx.save();
