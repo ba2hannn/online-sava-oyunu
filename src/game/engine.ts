@@ -1777,12 +1777,11 @@ export class BattleSimulationEngine {
     ctx.translate(shakeX, shakeY);
 
     if (bgImg) {
-      // Illustrated Era Background with cinematic parallax (0.35x camera track)
+      // Illustrated Era Background (3-tile mirrored seamless panorama at natural scale, 0.45x parallax)
       ctx.save();
-      const parallaxSpeed = 0.35;
-      const bgX = -clampedCamX * parallaxSpeed - 40;
-      const bgW = Math.max(virtualWidth + (WORLD_WIDTH - virtualWidth) * parallaxSpeed + 120, 2400);
-      ctx.drawImage(bgImg.img, bgX, 0, bgW, virtualHeight);
+      const parallaxSpeed = 0.45;
+      const bgX = -clampedCamX * parallaxSpeed;
+      ctx.drawImage(bgImg.img, bgX, 0, 3009, GROUND_Y);
       ctx.restore();
     } else {
       // Fallback: 3. Far Parallax Mountains (0.28x camera speed)

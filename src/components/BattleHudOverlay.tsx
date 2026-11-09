@@ -694,11 +694,19 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
         )}
 
         {/* Primary Unified Bottom Dock */}
-        <div className="w-full max-w-[1180px] pointer-events-auto bg-[#0c1018]/95 border-2 border-slate-700/90 rounded-xl p-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.95)] flex flex-wrap lg:flex-nowrap items-stretch justify-between gap-2">
+        <div className="w-full max-w-[1240px] pointer-events-auto bg-[#0b0f17]/96 border-2 border-slate-700/80 rounded-xl p-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.95)] backdrop-blur-md flex flex-wrap lg:flex-nowrap items-stretch justify-between gap-2.5">
           {/* 4 Unit Spawn Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
             {myUnits.map((u, idx) => {
               const canAfford = myTeam.gold >= u.cost && myTeam.queue.length < 5;
+              const archetypeStyles: Record<string, { border: string; glow: string; badge: string }> = {
+                swarmer: { border: 'border-amber-600/60', glow: 'hover:border-amber-400 hover:shadow-[0_0_12px_rgba(245,158,11,0.25)]', badge: 'bg-amber-950/60 text-amber-300 border-amber-600/40' },
+                ranger: { border: 'border-emerald-600/60', glow: 'hover:border-emerald-400 hover:shadow-[0_0_12px_rgba(16,185,129,0.25)]', badge: 'bg-emerald-950/60 text-emerald-300 border-emerald-600/40' },
+                charger: { border: 'border-sky-600/60', glow: 'hover:border-sky-400 hover:shadow-[0_0_12px_rgba(56,189,248,0.25)]', badge: 'bg-sky-950/60 text-sky-300 border-sky-600/40' },
+                colossus: { border: 'border-purple-600/60', glow: 'hover:border-purple-400 hover:shadow-[0_0_12px_rgba(168,85,247,0.25)]', badge: 'bg-purple-950/60 text-purple-300 border-purple-600/40' },
+              };
+              const style = archetypeStyles[u.archetype] || archetypeStyles.swarmer;
+
               return (
                 <button
                   key={u.id}
@@ -712,18 +720,18 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                       defId: u.id,
                     });
                   }}
-                  className={`p-1.5 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer group ${
+                  className={`p-2 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
                     canAfford
-                      ? 'bg-[#141c2b] border-slate-600 hover:border-amber-400 active:scale-[0.98]'
-                      : 'bg-[#0e131d] border-slate-800/80 opacity-55'
+                      ? `bg-gradient-to-b from-[#141b28] to-[#0e141f] ${style.border} ${style.glow} active:scale-[0.98]`
+                      : 'bg-[#0d121a] border-slate-800/80 opacity-50 cursor-not-allowed'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded bg-[#090d16] border border-slate-700/80 flex items-center justify-center shrink-0 overflow-hidden relative">
+                    <div className="w-11 h-11 rounded-lg bg-[#070a10] border border-slate-700/80 flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner">
                       <img
                         src={`/assets/ui/portraits/${u.id}.png`}
                         alt={u.name}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
@@ -734,16 +742,18 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold text-white truncate">{u.name}</span>
-                        <span className="text-[10px] font-mono-num font-bold text-slate-400 shrink-0">
+                        <span className="text-xs font-bold text-slate-100 truncate">
+                          {u.name}
+                        </span>
+                        <span className="text-[10px] font-mono-num font-bold px-1 rounded bg-black/60 text-slate-400 shrink-0 border border-slate-800">
                           [{idx + 1}]
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate">{u.roleClue}</div>
+                      <div className="text-[10px] text-slate-400 truncate mt-0.5">{u.roleClue}</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs font-mono-num pt-1 border-t border-slate-800/80 mt-1">
+                  <div className="flex items-center justify-between text-xs font-mono-num pt-1.5 border-t border-slate-800/80 mt-1.5">
                     <span className="font-bold text-amber-300">{u.cost} Altın</span>
                     <span className="text-[10px] text-slate-400">
                       Hsr {u.damage} · Can {u.hp}
@@ -763,18 +773,32 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 e.currentTarget.blur();
                 setActiveDrawer(activeDrawer === 'turrets' ? 'none' : 'turrets');
               }}
-              className={`px-3 py-2 rounded-lg border text-left flex flex-col justify-between cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeDrawer === 'turrets'
-                  ? 'bg-amber-600 text-slate-950 border-amber-300 font-bold'
-                  : 'bg-[#141c2b] text-amber-200 border-amber-700/70 hover:border-amber-400'
+                  ? 'bg-amber-600/30 text-amber-200 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)] font-bold'
+                  : 'bg-[#121824] text-slate-300 border-slate-700/80 hover:border-amber-500/80 active:scale-[0.98]'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span>Kuleler</span>
-                <span className="font-mono-num text-[11px] opacity-80">[T]</span>
+              <div className="w-8 h-8 rounded bg-black/40 border border-amber-700/60 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src="/assets/ui/actions/btn_towers.png"
+                  alt="Kuleler"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
               </div>
-              <div className="text-[11px] opacity-85 font-mono-num">
-                Kurulu: {myTeam.turrets.filter(Boolean).length}/{myTeam.unlockedTurretSlots}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between gap-1.5 text-xs font-bold text-white">
+                  <span>Kuleler</span>
+                  <span className="font-mono-num text-[10px] px-1 rounded bg-black/50 text-slate-400 border border-slate-800">
+                    [T]
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono-num text-amber-300/90 font-semibold">
+                  Kurulu: {myTeam.turrets.filter(Boolean).length}/{myTeam.unlockedTurretSlots}
+                </div>
               </div>
             </button>
 
@@ -785,18 +809,36 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 e.currentTarget.blur();
                 setActiveDrawer(activeDrawer === 'doctrines' ? 'none' : 'doctrines');
               }}
-              className={`px-3 py-2 rounded-lg border text-left flex flex-col justify-between cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeDrawer === 'doctrines'
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-200 font-bold'
-                  : 'bg-[#141c2b] text-emerald-300 border-emerald-700/70 hover:border-emerald-400'
+                  ? 'bg-emerald-600/30 text-emerald-200 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)] font-bold'
+                  : 'bg-[#121824] text-slate-300 border-slate-700/80 hover:border-emerald-500/80 active:scale-[0.98]'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span>Doktrin</span>
-                <span className="font-mono-num text-[11px] opacity-80">[G]</span>
+              <div className="w-8 h-8 rounded bg-black/40 border border-emerald-700/60 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src="/assets/ui/actions/btn_doctrine.png"
+                  alt="Doktrin"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
               </div>
-              <div className="text-[11px] opacity-85 font-mono-num">
-                Teknoloji ({myTeam.doctrines.economyLevel + myTeam.doctrines.warfareLevel + myTeam.doctrines.fortressLevel})
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between gap-1.5 text-xs font-bold text-white">
+                  <span>Doktrin</span>
+                  <span className="font-mono-num text-[10px] px-1 rounded bg-black/50 text-slate-400 border border-slate-800">
+                    [G]
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono-num text-emerald-300/90 font-semibold">
+                  Teknoloji (
+                  {myTeam.doctrines.economyLevel +
+                    myTeam.doctrines.warfareLevel +
+                    myTeam.doctrines.fortressLevel}
+                  )
+                </div>
               </div>
             </button>
 
@@ -808,20 +850,34 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 e.currentTarget.blur();
                 onCommand({ type: 'EVOLVE_ERA', team: hud.playerTeam });
               }}
-              className={`px-3.5 py-2 rounded-lg border text-left flex flex-col justify-between transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-all whitespace-nowrap shrink-0 ${
                 canEvolve
-                  ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-300 shadow-[0_0_16px_rgba(168,85,247,0.5)] cursor-pointer'
-                  : 'bg-[#101520] text-slate-400 border-slate-800 opacity-65 cursor-not-allowed'
+                  ? 'bg-purple-900/40 text-purple-100 border-purple-400 shadow-[0_0_16px_rgba(168,85,247,0.5)] hover:border-purple-300 animate-pulse cursor-pointer'
+                  : 'bg-[#10141d] text-slate-500 border-slate-800/80 opacity-60 cursor-not-allowed'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                <span>Çağ Atla</span>
-                <span className="font-mono-num text-[11px]">[Q]</span>
+              <div className="w-8 h-8 rounded bg-black/40 border border-purple-700/60 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src="/assets/ui/actions/btn_evolve.png"
+                  alt="Çağ Atla"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
               </div>
-              <div className="text-[11px] font-mono-num font-semibold">
-                {myTeam.era >= ERAS.length - 1
-                  ? 'SON ÇAĞ'
-                  : `${Math.round(myTeam.xp)} / ${myEra.evolveXpCost} XP`}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between gap-1.5 text-xs font-bold text-white">
+                  <span>Çağ Atla</span>
+                  <span className="font-mono-num text-[10px] px-1 rounded bg-black/50 text-slate-400 border border-slate-800">
+                    [Q]
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono-num font-semibold text-purple-300">
+                  {myTeam.era >= ERAS.length - 1
+                    ? 'SON ÇAĞ'
+                    : `${Math.round(myTeam.xp)} / ${myEra.evolveXpCost} XP`}
+                </div>
               </div>
             </button>
 
@@ -833,13 +889,19 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 e.currentTarget.blur();
                 onCommand({ type: 'CAST_SPECIAL', team: hud.playerTeam });
               }}
-              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg border text-left flex items-center gap-2.5 transition-all whitespace-nowrap shrink-0 ${
                 myTeam.specialCooldown <= 0
-                  ? 'bg-rose-600 hover:bg-rose-500 text-white border-amber-300 shadow-[0_0_18px_rgba(225,29,72,0.5)] cursor-pointer'
-                  : 'bg-[#101520] text-slate-400 border-slate-800 opacity-75 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-[#2a0e16] via-[#3d121f] to-[#2a0e16] text-amber-100 border-amber-500/80 shadow-[0_0_15px_rgba(244,63,94,0.35)] hover:border-amber-300 active:scale-[0.98] cursor-pointer'
+                  : 'bg-[#10141d] text-slate-500 border-slate-800/80 opacity-60 cursor-not-allowed'
               }`}
             >
-              <div className="w-8 h-8 rounded bg-black/40 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+              <div
+                className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 overflow-hidden border ${
+                  myTeam.specialCooldown <= 0
+                    ? 'border-amber-400 bg-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+                    : 'border-slate-800 bg-black/40'
+                }`}
+              >
                 <img
                   src={`/assets/ui/powers/${POWER_ICONS[myTeam.era] || 'power_meteor'}.png`}
                   alt="Özel Güç"
@@ -850,14 +912,22 @@ export const BattleHudOverlay: React.FC<BattleHudOverlayProps> = ({
                 />
               </div>
               <div className="flex flex-col justify-between">
-                <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                  <span>{myEra.specialName}</span>
-                  <span className="font-mono-num text-[10px] opacity-80">[Space]</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-200 truncate max-w-[150px]">
+                    {myEra.specialName}
+                  </span>
+                  <span className="font-mono-num text-[10px] px-1 rounded bg-black/50 border border-slate-700 text-slate-300 font-bold">
+                    [Space]
+                  </span>
                 </div>
-                <div className="text-[11px] font-mono-num font-semibold">
-                  {myTeam.specialCooldown > 0
-                    ? `Dolum: ${myTeam.specialCooldown.toFixed(1)}s`
-                    : 'HAZIR · ATEŞLE'}
+                <div className="text-[11px] font-mono-num font-bold">
+                  {myTeam.specialCooldown > 0 ? (
+                    <span className="text-slate-400">
+                      Dolum: {myTeam.specialCooldown.toFixed(1)}s
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 animate-pulse">🔥 HAZIR · ATEŞLE</span>
+                  )}
                 </div>
               </div>
             </button>

@@ -20,9 +20,9 @@ for sub in ['portraits', 'cards', 'towers', 'turret_actions', 'actions', 'powers
     os.makedirs(os.path.join(OUT_UI, sub), exist_ok=True)
 
 # -------------------------------------------------------------
-# 1. ARKA PLANLARI HAZIRLA (5 ÇAĞ)
+# 1. ARKA PLANLARI HAZIRLA (5 ÇAĞ - 3-TILE AYNALI PANORAMA)
 # -------------------------------------------------------------
-print("[-] Arka planlar işleniyor...")
+print("[-] Arka planlar işleniyor (3-tile aynalama)...")
 
 bg_map = {
     'era0': os.path.join(SRC, 'Generated Image November 09, 2026 - 2_35AM.jpg'), # Taş Devri
@@ -32,14 +32,31 @@ bg_map = {
     'era4': os.path.join(SRC, 'Generated Image November 09, 2026 - 2_38AM.jpg'), # Siber Çağ
 }
 
+target_h = 560  # GROUND_Y = 560 ile tam hizalanacak doğal yükseklik
+
 for era, src_path in bg_map.items():
     if os.path.exists(src_path):
         im = Image.open(src_path).convert('RGB')
-        # Standardize to 1920x1080 high quality
-        im_hd = im.resize((1920, 1080), Image.Resampling.LANCZOS)
+        w, h = im.size
+        tile_w = int(w * (target_h / h))
+        im_scaled = im.resize((tile_w, target_h), Image.Resampling.LANCZOS)
+        im_flipped = im_scaled.transpose(Image.FLIP_LEFT_RIGHT)
+        
+        # 3-tile aynalama: A -> Ters A -> A (dikişsiz / seamless)
+        if era == 'era3':
+            p1, p2, p3 = im_flipped, im_scaled, im_flipped
+        else:
+            p1, p2, p3 = im_scaled, im_flipped, im_scaled
+            
+        total_w = tile_w * 3
+        pano = Image.new('RGB', (total_w, target_h))
+        pano.paste(p1, (0, 0))
+        pano.paste(p2, (tile_w, 0))
+        pano.paste(p3, (tile_w * 2, 0))
+        
         out_path = os.path.join(OUT_BG, f'{era}.jpg')
-        im_hd.save(out_path, 'JPEG', quality=90)
-        print(f" [+] Arka plan hazır: {out_path} ({im_hd.size})")
+        pano.save(out_path, 'JPEG', quality=90)
+        print(f" [+] 3-Tile Aynalı Arka plan hazır: {out_path} ({total_w}x{target_h})")
 
 # -------------------------------------------------------------
 # 2. MAGENTA ARKA PLAN TEMİZLEME VE PARÇA KESİCİ
