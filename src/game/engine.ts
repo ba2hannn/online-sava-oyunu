@@ -1,4 +1,5 @@
 import {
+  BALANCE,
   ERAS,
   GROUND_Y,
   TEAM1_BASE_X,
@@ -9,6 +10,7 @@ import {
   TURRET_SLOT_SPACING,
   UNITS,
   getTurretById,
+  getUnitSupply,
   turretSlotOffsetY,
 } from './catalog';
 import { spriteAssets, TOWER_FOR_TURRET, TOWER_WEAPON, type SpriteImg } from './spriteAssets';
@@ -20,6 +22,8 @@ import {
   calculateArchetypeCounterMultiplier,
   calculateFortressHitComebackReward,
   calculateKillBountyMultiplier,
+  calculatePassiveGoldPerSecond,
+  calculatePassiveXpPerSecond,
   calculateProximityBountyRatio,
   calculateSituationalSpecialProfile,
   checkWinCondition,
@@ -99,6 +103,7 @@ export class BattleSimulationEngine {
 
   public nextUnitUid = 1;
   public elapsedTime = 0;
+  private overtimeAnnounced = false;
   public hitstopTimer = 0;
   public cameraTrauma = 0;
   public cameraX = 0;
@@ -273,6 +278,7 @@ export class BattleSimulationEngine {
     this.units = [];
     this.nextUnitUid = 1;
     this.elapsedTime = 0;
+    this.overtimeAnnounced = false;
     this.hitstopTimer = 0;
     this.cameraTrauma = 0;
     this.outcomeDelayTimer = 0;
@@ -437,7 +443,7 @@ export class BattleSimulationEngine {
 
     if (cmd.type === 'CAST_SPECIAL') {
       if (targetTeam.specialCooldown > 0) return false;
-      const warfareCdMult = Math.max(0.7, 1 - targetTeam.doctrines.warfareLevel * 0.06);
+      const warfareCdMult = Math.max(0.8, 1 - targetTeam.doctrines.warfareLevel * 0.04);
       targetTeam.specialCooldown = Math.round(targetTeam.specialMaxCooldown * warfareCdMult);
       this.triggerSpecialPower(targetTeam);
       this.emitHudSnapshot();
@@ -542,9 +548,11 @@ export class BattleSimulationEngine {
     const profile = calculateSituationalSpecialProfile(teamState, enemyTeam, this.units);
 
     // Grant tactical supply bonus on cast so using your ultimate helps break sieges & fund counter-attacks
-    teamState.gold += profile.supplyGoldBonus;
-    teamState.totalGoldEarned += profile.supplyGoldBonus;
-    teamState.xp += profile.supplyXpBonus;
+    if (profile.supplyGoldBonus > 0) {
+      teamState.gold += profile.supplyGoldBonus;
+      teamState.totalGoldEarned += profile.supplyGoldBonus;
+      teamState.xp += profile.supplyXpBonus;
+    }
 
     this.activeBanner = {
       text: `${era.specialName.toUpperCase()} · ${profile.modeLabel}!`,
@@ -560,32 +568,36 @@ export class BattleSimulationEngine {
     this.spawnFloatingText(
       baseX + dir * 70,
       GROUND_Y - 170,
-      `+${profile.supplyGoldBonus}A İKMAL · KIYAMET ATEŞİ!`,
+      'KIYAMET YAĞMURU!',
       era.accentColor,
       1.2
     );
 
+    // Mermiler rastgele yüksekliklerden, rastgele noktalara düşer: darbeler zamana ve alana dağılır.
     for (let i = 0; i < profile.projectileCount; i++) {
       const targetX = profile.targetXs[i] ?? WORLD_WIDTH * 0.5;
-      // Spread spawnY across -45 to -1600 so the cataclysmic barrage rains down continuously for 3.5-4.5 seconds!
-      const spawnY = -45 - i * 26 - (i % 4) * 18;
-      const horizontalLead = dir * (profile.projectileType === 'arrow' ? 165 : 115);
-      const vx = dir * (profile.projectileType === 'arrow' ? 225 : 155);
+      const spawnY = profile.spawnHeights[i] ?? -200;
+      const gravity = 190;
+      const vx = dir * (profile.projectileType === 'arrow' ? 90 : 55);
       const vy =
         profile.projectileType === 'orbital'
-          ? 780 + (i % 5) * 35
+          ? 760 + (i % 5) * 30
           : profile.projectileType === 'arrow'
           ? 640 + (i % 5) * 30
           : 560 + (i % 5) * 28;
+      // Yere varış süresi: GROUND_Y = spawnY + vy*t + g*t^2/2 -> başlangıç x'i, hedefe tam düşecek şekilde seçilir.
+      const fall = GROUND_Y - spawnY;
+      const tFall = (-vy + Math.sqrt(vy * vy + 2 * gravity * fall)) / gravity;
+      const startX = targetX - vx * tFall;
 
       this.spawnProjectile(
         teamState.team,
         profile.projectileType,
-        targetX - horizontalLead,
+        startX,
         spawnY,
         vx,
         vy,
-        190,
+        gravity,
         profile.damagePerHit,
         profile.splashRadius,
         profile.knockback,
@@ -728,18 +740,6 @@ export class BattleSimulationEngine {
         this.difficulty === 'legendary' ? 0.55 : this.difficulty === 'hard' ? 0.8 : 1.05;
       if (this.aiDecisionTimer >= aiInterval) {
         this.aiDecisionTimer = 0;
-        // AI Commander receives a steady war-supply budget to send relentless waves at the player,
-        // while XP is earned primarily from combat + a small commander tactical progression
-        const eraScale = Math.pow(1.85, this.team2.era);
-        const supplyGold =
-          (this.difficulty === 'legendary' ? 28 : this.difficulty === 'hard' ? 21 : 15) *
-          eraScale;
-        const supplyXp =
-          (this.difficulty === 'legendary' ? 18 : this.difficulty === 'hard' ? 12 : 7) *
-          eraScale;
-        this.team2.gold += supplyGold;
-        this.team2.xp += supplyXp;
-
         const aiCmd = decideAICommand(
           this.team2,
           this.team1,
@@ -813,7 +813,67 @@ export class BattleSimulationEngine {
       }
     }
 
-    // Dynamic Anti-Stall & Underdog Comeback Supply:
+    // Nüfus: sahadaki canlı birimlerin toplam nüfusu (kuyruk ayrıca rules.getTeamSupply ile eklenir)
+    let fieldSupply = 0;
+    for (const u of this.units) {
+      if (u.state !== 'ko' && u.team === team.team) fieldSupply += getUnitSupply(u.archetype);
+    }
+    team.fieldSupply = fieldSupply;
+
+    // Pasif gelir: iki komutan da çağına göre aynı bütçeyi alır (YZ zorluğu hafifçe çarpar).
+    if (this.lifecycle === 'playing') {
+      const diffMult =
+        this.mode === 'ai' && team.team === 2
+          ? this.difficulty === 'legendary'
+            ? 1.15
+            : this.difficulty === 'hard'
+            ? 1.0
+            : 0.85
+          : 1;
+      const goldGain = calculatePassiveGoldPerSecond(team) * diffMult * dt;
+      team.gold += goldGain;
+      team.totalGoldEarned += goldGain;
+      team.xp += calculatePassiveXpPerSecond(team) * diffMult * dt;
+    }
+
+    // SON SAVAŞ: uzayan maçlar bitsin diye, geride olan kale giderek hızlanan hasar alır.
+    if (
+      this.lifecycle === 'playing' &&
+      !this.isNetReplica() &&
+      this.pendingWinner === null &&
+      this.elapsedTime > BALANCE.OVERTIME_START
+    ) {
+      if (!this.overtimeAnnounced) {
+        this.overtimeAnnounced = true;
+        this.activeBanner = {
+          text: 'SON SAVAŞ! GERİDEKİ KALE ÇÖKÜYOR',
+          color: '#ef4444',
+          timer: 3.2,
+        };
+        this.cameraTrauma = Math.min(1, this.cameraTrauma + 0.5);
+      }
+      // Geride olan: önce kale canı oranı; eşitse cephe hattı daha geride olan taraf.
+      const myRatio = team.hp / Math.max(1, team.maxHp);
+      const enemyRatio = enemyTeam.hp / Math.max(1, enemyTeam.maxHp);
+      const frontOf = (tm: TeamId): number => {
+        let best = 0;
+        for (const u of this.units) {
+          if (u.team !== tm || u.state === 'ko') continue;
+          const prog = tm === 1 ? u.x - TEAM1_BASE_X : TEAM2_BASE_X - u.x;
+          if (prog > best) best = prog;
+        }
+        return best / (TEAM2_BASE_X - TEAM1_BASE_X);
+      };
+      const myScore = myRatio + frontOf(team.team) * 0.04;
+      const enemyScore = enemyRatio + frontOf(enemyTeam.team) * 0.04;
+      if (myScore < enemyScore || (myScore === enemyScore && team.team === 2)) {
+        const minutes = (this.elapsedTime - BALANCE.OVERTIME_START) / 60;
+        const pct = BALANCE.OVERTIME_BASE_DRAIN_PCT * (1 + minutes * BALANCE.OVERTIME_RAMP_PER_MIN * 2);
+        team.hp = Math.max(0, team.hp - team.maxHp * pct * dt);
+      }
+    }
+
+    // Kilitlenme önleyici acil ikmal (başka hiçbir yardım yok):
     // Standing idle with a rich treasury gives 0 gold, but if you are behind, outnumbered,
     // pinned at your gate, or out of units/gold, the game supplies emergency logistics so it NEVER stalls!
     if (this.lifecycle === 'playing') {
@@ -841,7 +901,7 @@ export class BattleSimulationEngine {
 
     if (team.specialCooldown > 0) {
       // Situational Cooldown Acceleration: if enemies are pressing your base, special power charges up to 45% faster!
-      const siegeHaste = enemiesNearMyBase >= 2 ? 1.45 : enemiesNearMyBase === 1 ? 1.2 : 1.0;
+      const siegeHaste = enemiesNearMyBase >= 2 ? 1.2 : enemiesNearMyBase === 1 ? 1.1 : 1.0;
       team.specialCooldown = Math.max(0, team.specialCooldown - dt * siegeHaste);
     }
 
@@ -909,10 +969,10 @@ export class BattleSimulationEngine {
 
         if (t.cooldown <= 0) {
           const levelMult =
-            (1 + (t.level - 1) * 0.35) *
-            (1 + warfareDocLevel * 0.12) *
-            (bestDist < 340 ? 1.25 : 1.0); // +25% Point-Blank Gate Defense bonus!
-          const fireRateBoost = (1 + (t.level - 1) * 0.14) * (1 + fortressDocLevel * 0.08);
+            (1 + (t.level - 1) * 0.22) *
+            (1 + warfareDocLevel * 0.1) *
+            (bestDist < 340 ? 1.1 : 1.0); // +10% yakın menzil bonusu
+          const fireRateBoost = (1 + (t.level - 1) * 0.1) * (1 + fortressDocLevel * 0.06);
           t.cooldown = def.fireInterval / fireRateBoost;
           t.recoil = 1;
 
@@ -960,7 +1020,7 @@ export class BattleSimulationEngine {
 
       // Regenerate shield slightly for Colossus / Future units out of hit flash
       if (u.state !== 'ko' && u.maxShield > 0 && u.shield < u.maxShield && u.hitFlashTimer <= 0) {
-        u.shield = Math.min(u.maxShield, u.shield + u.maxShield * 0.05 * dt);
+        u.shield = Math.min(u.maxShield, u.shield + u.maxShield * 0.02 * dt);
       }
 
       if (u.state === 'ko') {
@@ -1307,17 +1367,17 @@ export class BattleSimulationEngine {
     const enemyCount = this.units.filter((u) => u.team !== killerTeam.team && u.state !== 'ko').length;
     const effectiveMult =
       prox.progress < 0.25 && enemyCount > allyCount
-        ? Math.max(0.85, prox.multiplier)
+        ? Math.max(0.9, prox.multiplier)
         : prox.multiplier;
     const effectivePct = Math.round(effectiveMult * 100);
 
     const goldEarned = Math.max(
       6,
-      Math.round(victim.rewardGold * 1.65 * bountyMult * effectiveMult)
+      Math.round(victim.rewardGold * BALANCE.KILL_GOLD_SCALE * bountyMult * effectiveMult)
     );
     const xpEarned = Math.max(
       8,
-      Math.round(victim.rewardXp * 1.35 * bountyMult * (0.75 + prox.progress * 0.65))
+      Math.round(victim.rewardXp * BALANCE.KILL_XP_SCALE * bountyMult * (0.8 + prox.progress * 0.45))
     );
     killerTeam.gold += goldEarned;
     killerTeam.totalGoldEarned += goldEarned;
@@ -1733,7 +1793,7 @@ export class BattleSimulationEngine {
       if (entry.cmd.type === 'CAST_SPECIAL') {
         reapplied = myTeam.specialCooldown <= 0;
         if (reapplied) {
-          const warfareCdMult = Math.max(0.7, 1 - myTeam.doctrines.warfareLevel * 0.06);
+          const warfareCdMult = Math.max(0.8, 1 - myTeam.doctrines.warfareLevel * 0.04);
           myTeam.specialCooldown = Math.round(myTeam.specialMaxCooldown * warfareCdMult);
         }
       } else {
